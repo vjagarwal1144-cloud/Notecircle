@@ -210,7 +210,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
         ...prev,
         step: 'verify',
         userId: res.userId,
-        code: res.recoveryCode || '849201',
+        code: '',
         msg: res.message
       }));
     } catch (err: any) {
@@ -246,6 +246,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
       await fetchSessions();
     } catch (err: any) {
       alert(err.message || 'Failed to logout devices');
+    }
+  };
+
+  const handleRevokeSession = async (sessionId: string) => {
+    try {
+      await api.revokeSession(sessionId);
+      await fetchSessions();
+    } catch (err: any) {
+      alert(err.message || 'Failed to revoke session');
     }
   };
 
@@ -915,9 +924,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
                           This Device
                         </span>
                       ) : (
-                        <span className="text-stone-500 dark:text-stone-400 bg-stone-200 dark:bg-stone-800 px-2.5 py-1 rounded-full font-medium text-[10px]">
-                          Remote Device
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-stone-500 dark:text-stone-400 bg-stone-200 dark:bg-stone-800 px-2.5 py-1 rounded-full font-medium text-[10px]">
+                            Remote Device
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRevokeSession(s.id)}
+                            className="px-2 py-0.5 text-[10px] text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-md border border-rose-200 dark:border-rose-900 font-semibold"
+                          >
+                            Revoke
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1139,7 +1157,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
                     type="text"
                     value={forgotModal.code}
                     onChange={(e) => setForgotModal({ ...forgotModal, code: e.target.value })}
-                    placeholder="849201"
+                    placeholder="Enter 6-digit OTP"
                     className="w-full text-xs p-2.5 bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-700 rounded-xl text-center font-mono tracking-wider text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
                   />
                 </div>

@@ -7,16 +7,19 @@ import {
   MoreHorizontal, 
   VolumeX, 
   Trash2, 
-  Lock,
-  MessageCircle,
-  Plus,
-  Moon,
-  Sparkles,
-  Edit2,
-  Check,
-  Shield,
-  WifiOff,
-  UserCheck
+  Lock, 
+  MessageCircle, 
+  Plus, 
+  Moon, 
+  Sparkles, 
+  Edit2, 
+  Check, 
+  Shield, 
+  WifiOff, 
+  UserCheck,
+  Calendar,
+  Zap,
+  MapPin
 } from 'lucide-react';
 import { api } from '../services/api.ts';
 import { localDb } from '../services/localDb.ts';
@@ -39,15 +42,21 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   onOpenChatWithUser,
   onOpenProfile
 }) => {
-  const { currentUser, isOnline } = useAuth();
+  const { currentUser, isOnline, updateAvailability } = useAuth();
   const [notes, setNotes] = useState<Note[]>([]);
   const [myActiveNote, setMyActiveNote] = useState<Note | null>(null);
+  const [circleMembers, setCircleMembers] = useState<any[]>([]);
+  const [plans, setPlans] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterMode, setFilterMode] = useState<'all' | 'close_friends'>('all');
   const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
   const [replyInput, setReplyInput] = useState<Record<string, string>>({});
   const [submittingReply, setSubmittingReply] = useState<Record<string, boolean>>({});
   const [activeMenuNoteId, setActiveMenuNoteId] = useState<string | null>(null);
+  const [showCreatePlanModal, setShowCreatePlanModal] = useState(false);
+  const [newPlanTitle, setNewPlanTitle] = useState('');
+  const [newPlanTime, setNewPlanTime] = useState('');
+  const [newPlanLocation, setNewPlanLocation] = useState('');
 
   const fetchFeed = async () => {
     try {
@@ -70,6 +79,16 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
       if (currentUser) {
         const myRes = await api.getMyNotes();
         setMyActiveNote(myRes.activeNotes[0] || null);
+
+        // Fetch Live Circle & Plans
+        try {
+          const [circleRes, plansRes] = await Promise.all([
+            api.getCircleStatus(),
+            api.getPlans()
+          ]);
+          setCircleMembers(circleRes.circleMembers || []);
+          setPlans(plansRes.plans || []);
+        } catch {}
       }
     } catch (err) {
       console.error('Failed to load feed:', err);
@@ -181,15 +200,15 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
           <div className="flex items-center gap-2.5">
             <span className="text-xl select-none">{currentUser?.availability?.emoji || '🟢'}</span>
             <div>
-              <p className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+              <p className="text-xs font-bold text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
                 <span>{currentUser?.availability?.label || 'Available'}</span>
                 {currentUser?.availability?.strictDnd && (
-                  <span className="text-[9px] bg-rose-100 text-rose-800 font-bold px-1.5 py-0.2 rounded-full">
+                  <span className="text-[9px] bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 font-bold px-1.5 py-0.2 rounded-full">
                     Strict DND
                   </span>
                 )}
               </p>
-              <p className="text-[11px] text-slate-500 truncate max-w-[260px]">
+              <p className="text-[11px] text-stone-500 dark:text-stone-400 truncate max-w-[260px]">
                 {currentUser?.availability?.customStatus || 'Tap to let your people know your availability'}
               </p>
             </div>
@@ -252,6 +271,153 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
             >
               <Plus className="w-4 h-4" />
             </button>
+          </div>
+        )}
+
+        {/* Quick Life Actions (One-Tap Status / Activity Updates) */}
+        <div className="pt-2 border-t border-stone-100 dark:border-stone-800 space-y-1.5">
+          <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Quick Life Actions</p>
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            {[
+              { emoji: '👋', label: "I'm here", code: 'available' },
+              { emoji: '🚗', label: 'On my way', code: 'busy' },
+              { emoji: '📞', label: 'Call me', code: 'available' },
+              { emoji: '🍕', label: "Let's eat", code: 'available' },
+              { emoji: '🎮', label: "Let's play", code: 'available' },
+              { emoji: '⛔', label: 'Busy now', code: 'busy', strict: true },
+              { emoji: '✨', label: 'Free now', code: 'available' }
+            ].map((action, idx) => (
+              <button
+                key={idx}
+                onClick={async () => {
+                  try {
+                    await updateAvailability({
+                      code: action.code as any,
+                      label: action.label,
+                      emoji: action.emoji,
+                      strictDnd: !!action.strict
+                    });
+                  } catch {}
+                }}
+                className="px-2.5 py-1.5 rounded-xl bg-stone-50 dark:bg-stone-800/80 hover:bg-amber-50 dark:hover:bg-amber-950/40 border border-stone-200/80 dark:border-stone-700/80 text-xs text-stone-700 dark:text-stone-300 flex items-center gap-1.5 shrink-0 transition-transform active:scale-95 font-medium cursor-pointer"
+              >
+                <span>{action.emoji}</span>
+                <span>{action.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Live Circle: People & Presence */}
+      {circleMembers.length > 0 && (
+        <div className="glass-card rounded-3xl p-4 shadow-xs space-y-3 bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-stone-800 dark:text-stone-200 uppercase tracking-wider flex items-center gap-1.5 font-display">
+              <Zap className="w-3.5 h-3.5 text-amber-600" />
+              <span>Live Circle Status</span>
+            </h3>
+            <span className="text-[10px] text-stone-400 font-semibold">{circleMembers.length} connected</span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {circleMembers.map((m) => (
+              <div
+                key={m.id}
+                onClick={() => onOpenProfile?.(m.username)}
+                className="p-2.5 bg-stone-50 dark:bg-stone-850 rounded-2xl border border-stone-200/60 dark:border-stone-750 flex items-center gap-2 cursor-pointer hover:border-amber-400 transition-colors"
+              >
+                <div className="relative">
+                  <UserAvatar name={m.displayName} src={m.avatarUrl} size="sm" />
+                  <span className="absolute -bottom-1 -right-1 text-xs">{m.availability?.emoji || '🟢'}</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-stone-900 dark:text-stone-100 truncate">{m.displayName}</p>
+                  <p className="text-[10px] text-stone-500 dark:text-stone-400 truncate">
+                    {m.activeNote ? `"${m.activeNote.text}"` : (m.availability?.label || 'Available')}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Circle Plans */}
+      <div className="glass-card rounded-3xl p-4 shadow-xs space-y-3 bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold text-stone-800 dark:text-stone-200 uppercase tracking-wider flex items-center gap-1.5 font-display">
+            <Calendar className="w-3.5 h-3.5 text-amber-600" />
+            <span>Circle Plans</span>
+          </h3>
+          <button
+            onClick={() => setShowCreatePlanModal(true)}
+            className="text-[10px] font-bold text-amber-700 dark:text-amber-400 hover:underline flex items-center gap-1"
+          >
+            <Plus className="w-3 h-3" />
+            <span>New Plan</span>
+          </button>
+        </div>
+
+        {plans.length === 0 ? (
+          <p className="text-xs text-stone-400 dark:text-stone-500 italic py-1">
+            No upcoming group plans. Tap 'New Plan' to plan dinner, weekend trip or hangout.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {plans.map((p) => {
+              const myRsvp = p.rsvps?.find((r: any) => r.userId === currentUser?.id)?.status;
+              return (
+                <div key={p.id} className="p-3 bg-stone-50 dark:bg-stone-850 rounded-2xl border border-stone-200/60 dark:border-stone-750 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="text-xl">{p.emoji || '📅'}</span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-stone-900 dark:text-stone-100 truncate">{p.title}</p>
+                      <p className="text-[11px] text-stone-500 dark:text-stone-400 flex items-center gap-2">
+                        <span>{p.scheduledTime}</span>
+                        {p.location && (
+                          <>
+                            <span>·</span>
+                            <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3" />{p.location}</span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={async () => {
+                        await api.rsvpPlan(p.id, 'attending');
+                        const res = await api.getPlans();
+                        setPlans(res.plans);
+                      }}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold ${
+                        myRsvp === 'attending'
+                          ? 'bg-amber-600 text-white'
+                          : 'bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700'
+                      }`}
+                    >
+                      Going
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await api.rsvpPlan(p.id, 'maybe');
+                        const res = await api.getPlans();
+                        setPlans(res.plans);
+                      }}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold ${
+                        myRsvp === 'maybe'
+                          ? 'bg-amber-600 text-white'
+                          : 'bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700'
+                      }`}
+                    >
+                      Maybe
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -551,6 +717,85 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
               </article>
             );
           })}
+        </div>
+      )}
+
+      {/* Create Plan Modal */}
+      {showCreatePlanModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-xs">
+          <div className="bg-white dark:bg-[#1C1A18] w-full max-w-md rounded-3xl p-6 shadow-2xl border border-stone-200/80 dark:border-stone-800 space-y-4 animate-in fade-in zoom-in-95">
+            <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 flex items-center gap-1.5 font-display">
+              <Calendar className="w-4 h-4 text-amber-600" />
+              <span>Create Circle Plan</span>
+            </h3>
+
+            <div>
+              <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 block mb-1">Plan Title</label>
+              <input
+                type="text"
+                value={newPlanTitle}
+                onChange={(e) => setNewPlanTitle(e.target.value)}
+                placeholder="e.g. Saturday Dinner, Coorg Trip, Badminton"
+                className="w-full text-xs p-2.5 bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-700 rounded-xl text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 block mb-1">Date & Time</label>
+              <input
+                type="text"
+                value={newPlanTime}
+                onChange={(e) => setNewPlanTime(e.target.value)}
+                placeholder="e.g. This Saturday at 7:30 PM"
+                className="w-full text-xs p-2.5 bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-700 rounded-xl text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 block mb-1">Location (Optional)</label>
+              <input
+                type="text"
+                value={newPlanLocation}
+                onChange={(e) => setNewPlanLocation(e.target.value)}
+                placeholder="e.g. Olive Beach / Discord"
+                className="w-full text-xs p-2.5 bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-700 rounded-xl text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+              <button
+                type="button"
+                onClick={() => setShowCreatePlanModal(false)}
+                className="px-3.5 py-2 text-xs text-stone-600 dark:text-stone-400"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!newPlanTitle.trim() || !newPlanTime.trim()}
+                onClick={async () => {
+                  try {
+                    await api.createPlan({
+                      title: newPlanTitle.trim(),
+                      scheduledTime: newPlanTime.trim(),
+                      location: newPlanLocation.trim() || undefined
+                    });
+                    const res = await api.getPlans();
+                    setPlans(res.plans);
+                    setShowCreatePlanModal(false);
+                    setNewPlanTitle('');
+                    setNewPlanTime('');
+                    setNewPlanLocation('');
+                  } catch (err: any) {
+                    alert(err.message || 'Failed to create plan');
+                  }
+                }}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+              >
+                Create Plan
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

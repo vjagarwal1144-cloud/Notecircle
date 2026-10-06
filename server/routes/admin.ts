@@ -127,10 +127,13 @@ adminRouter.post('/backup/verify', requireAdmin, (req, res) => {
   }
 });
 
-// POST /api/admin/reset-demo
-adminRouter.post('/reset-demo', requireAdmin, (req, res) => {
+// POST /api/admin/reset-database (Development only, strictly disallowed in production)
+adminRouter.post('/reset-database', requireAdmin, (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'Database reset tool is strictly disabled in production environments.' });
+  }
   const viewer = (req as any).viewer;
   db.resetToDefault();
-  db.logAudit(viewer.id, viewer.username, 'DATABASE_RESET', 'Database reset to initial state');
-  return res.json({ success: true, message: 'Database reset to clean baseline' });
+  db.logAudit(viewer.id, viewer.username, 'DATABASE_RESET', 'Development database reset to clean baseline');
+  return res.json({ success: true, message: 'Development database reset to clean baseline' });
 });

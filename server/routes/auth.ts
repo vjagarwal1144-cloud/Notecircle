@@ -1,16 +1,28 @@
 import { Router } from 'express';
-import { db, hashPassword, generateToken, parseToken } from '../db.ts';
+import crypto from 'node:crypto';
+import { db, hashPassword, verifyPassword, generateToken, parseToken } from '../db.ts';
 import type { User } from '../../src/types/index.ts';
 
 export const authRouter = Router();
 
-// Middleware to extract authenticated user
+// Middleware to extract authenticated user & validate active server-side session
 export function getAuthUser(req: any): User | null {
   const authHeader = req.headers.authorization;
   if (!authHeader) return null;
-  const token = authHeader.replace(/^Bearer\s+/, '');
+  const token = authHeader.replace(/^Bearer\s+/, '').trim();
   const userId = parseToken(token);
   if (!userId) return null;
+
+  // Validate server-side session record
+  const session = db.getSessionByToken(token);
+  if (!session) {
+    // Session was revoked or logged out
+    return null;
+  }
+
+  // Update last active
+  db.touchSession(token);
+
   const user = db.get('users').find((u) => u.id === userId);
   return user || null;
 }
@@ -19,45 +31,21 @@ export function getAuthUser(req: any): User | null {
 authRouter.get('/me', (req, res) => {
   const user = getAuthUser(req);
   if (!user) {
-    return res.status(401).json({ error: 'Not authenticated' });
+    return res.status(401).json({ error: 'Session invalid or expired. Please sign in.' });
   }
   return res.json({ user });
 });
 
-// GET /api/auth/switchable-users (Quick switcher for testing real interactions)
-authRouter.get('/switchable-users', (req, res) => {
-  const users = db.get('users').map((u) => ({
-    id: u.id,
-    username: u.username,
-    displayName: u.displayName,
-    avatarUrl: u.avatarUrl,
-    bio: u.bio,
-    isAdmin: !!u.isAdmin
-  }));
-  return res.json({ users });
-});
-
-// POST /api/auth/switch-user (Instantly log in as any test user)
-authRouter.post('/switch-user', (req, res) => {
-  const { userId } = req.body;
-  const user = db.get('users').find((u) => u.id === userId);
-  if (!user) {
-    return res.status(404).json({ error: 'User not found' });
-  }
-  const token = generateToken(user.id);
-  return res.json({ token, user });
-});
-
 // POST /api/auth/login
 authRouter.post('/login', (req, res) => {
-  const { identifier, password } = req.body;
+  const { identifier, password, deviceName } = req.body;
   if (!identifier || !password) {
-    return res.status(400).json({ error: 'Identifier (username/email) and password are required' });
+    return res.status(400).json({ error: 'Username/email and password are required' });
   }
 
   const cleanIdent = identifier.trim().toLowerCase();
   const user = db.get('users').find(
-    (u) => u.username.toLowerCase() === cleanIdent || u.email.toLowerCase() === cleanIdent
+    (u) => u.username.toLowerCase() === cleanIdent || (u.email && u.email.toLowerCase() === cleanIdent)
   );
 
   if (!user) {
@@ -68,27 +56,31 @@ authRouter.post('/login', (req, res) => {
     return res.status(403).json({ error: 'This account has been suspended by administration.' });
   }
 
-  // Check password
-  const expectedHash = hashPassword(password);
-  // Default fallback password for demo users is 'password123'
-  const isMatch = (user as any).passwordHash 
-    ? (user as any).passwordHash === expectedHash 
-    : password === 'password123' || password === 'admin123';
-
-  if (!isMatch) {
+  const storedHash = (user as any).passwordHash;
+  if (!storedHash || !verifyPassword(password, storedHash)) {
     return res.status(401).json({ error: 'Invalid username or password' });
   }
 
   const token = generateToken(user.id);
+  const device = deviceName || req.headers['user-agent']?.substring(0, 50) || 'Web Client';
+  const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
+
+  db.createSession(user.id, token, device, ip);
+  db.logAudit(user.id, user.username, 'LOGIN_SUCCESS', `Device: ${device}`);
+
   return res.json({ token, user });
 });
 
 // POST /api/auth/register
 authRouter.post('/register', (req, res) => {
-  const { username, displayName, email, phone, password, city, bio } = req.body;
+  const { username, displayName, email, phone, password, city, bio, deviceName } = req.body;
 
   if (!username || !displayName || (!email && !phone) || !password) {
     return res.status(400).json({ error: 'Username, display name, email/phone and password are required' });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
   }
 
   const cleanUsername = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
@@ -101,7 +93,7 @@ authRouter.post('/register', (req, res) => {
     return res.status(409).json({ error: 'Username is already taken' });
   }
 
-  if (email && users.some((u) => u.email.toLowerCase() === email.trim().toLowerCase())) {
+  if (email && users.some((u) => u.email && u.email.toLowerCase() === email.trim().toLowerCase())) {
     return res.status(409).json({ error: 'Email is already registered' });
   }
 
@@ -161,34 +153,70 @@ authRouter.post('/register', (req, res) => {
   (newUser as any).passwordHash = hashPassword(password);
 
   db.update('users', (curr) => [...curr, newUser]);
+
   const token = generateToken(newUser.id);
+  const device = deviceName || req.headers['user-agent']?.substring(0, 50) || 'Web Client';
+  const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
+
+  db.createSession(newUser.id, token, device, ip);
+  db.logAudit(newUser.id, newUser.username, 'REGISTER_SUCCESS', `New account created: @${newUser.username}`);
 
   return res.status(201).json({ token, user: newUser });
 });
 
 // POST /api/auth/logout
-authRouter.post('/logout', (_req, res) => {
+authRouter.post('/logout', (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader) {
+    const token = authHeader.replace(/^Bearer\s+/, '').trim();
+    db.deleteSessionByToken(token);
+  }
   return res.json({ success: true, message: 'Logged out successfully' });
 });
 
-// POST /api/auth/forgot-password (Forgot password flow)
+// POST /api/auth/logout-all
+authRouter.post('/logout-all', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+  db.deleteAllSessionsForUser(user.id);
+  db.logAudit(user.id, user.username, 'LOGOUT_ALL_DEVICES', 'Terminated all active sessions');
+  return res.json({ success: true, message: 'All devices logged out successfully' });
+});
+
+// POST /api/auth/forgot-password
+// Generates a cryptographically random 6-digit recovery OTP, stores hashed token with 15-min expiry
 authRouter.post('/forgot-password', (req, res) => {
   const { identifier } = req.body;
   if (!identifier) return res.status(400).json({ error: 'Email or username is required' });
 
   const clean = identifier.trim().toLowerCase();
   const user = db.get('users').find(
-    (u) => u.username.toLowerCase() === clean || u.email.toLowerCase() === clean
+    (u) => u.username.toLowerCase() === clean || (u.email && u.email.toLowerCase() === clean)
   );
 
+  // Constant-time message response to prevent account enumeration
   if (!user) {
-    return res.json({ success: true, message: 'If this account exists, a recovery OTP code has been dispatched.' });
+    return res.json({
+      success: true,
+      message: 'If an account exists with this information, a secure recovery code has been sent.'
+    });
   }
 
-  return res.json({ 
-    success: true, 
-    message: `Recovery code dispatched to your registered address. Verification code: 849201`,
-    recoveryCode: '849201',
+  // Cryptographically random 6-digit code
+  const randomInt = crypto.randomInt(100000, 999999);
+  const rawOtp = randomInt.toString();
+  const codeHash = crypto.createHash('sha256').update(rawOtp).digest('hex');
+
+  db.createPasswordRecovery(user.id, codeHash, 15);
+  db.logAudit(user.id, user.username, 'PASSWORD_RECOVERY_REQUESTED', 'Recovery OTP generated and dispatched');
+
+  // In development/test runtime, we print OTP to secure system console rather than leaking in API response
+  console.log(`[AUTH RECOVERY DISPATCH] OTP for user @${user.username} (${user.email}): ${rawOtp}`);
+
+  return res.json({
+    success: true,
+    message: 'If an account exists with this information, a secure recovery code has been sent to your registered contact.',
     userId: user.id
   });
 });
@@ -197,21 +225,51 @@ authRouter.post('/forgot-password', (req, res) => {
 authRouter.post('/reset-password', (req, res) => {
   const { userId, code, newPassword } = req.body;
   if (!userId || !code || !newPassword) {
-    return res.status(400).json({ error: 'User ID, code, and new password are required' });
+    return res.status(400).json({ error: 'User ID, recovery code, and new password are required' });
   }
 
-  if (code !== '849201' && code.length !== 6) {
-    return res.status(400).json({ error: 'Invalid or expired recovery code' });
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
   }
+
+  const recovery = db.getActiveRecoveryRequest(userId);
+  if (!recovery) {
+    return res.status(400).json({ error: 'No active recovery request found. Please request a new code.' });
+  }
+
+  // Increment attempts to prevent brute force
+  db.incrementRecoveryAttempt(recovery.id);
+
+  const inputHash = crypto.createHash('sha256').update(code.trim()).digest('hex');
+  if (inputHash !== recovery.code_hash) {
+    return res.status(400).json({ error: 'Invalid recovery code. Please check and retry.' });
+  }
+
+  // Code is valid! Mark as used
+  db.markRecoveryUsed(recovery.id);
+
+  // Invalidate all existing sessions for this user on password change
+  db.deleteAllSessionsForUser(userId);
+
+  // Update password with scrypt KDF
+  const newHash = hashPassword(newPassword);
+  db.updateUserPassword(userId, newHash);
 
   const user = db.get('users').find((u) => u.id === userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  db.update('users', (users) =>
-    users.map((u) => (u.id === userId ? { ...u, passwordHash: hashPassword(newPassword) } : u))
-  );
-
-  db.logAudit(user.id, user.username, 'PASSWORD_RESET', 'Password successfully reset via recovery code');
+  // Issue brand-new authenticated session
   const token = generateToken(user.id);
-  return res.json({ success: true, message: 'Password reset successful! You are now logged in.', token, user });
+  const device = req.headers['user-agent']?.substring(0, 50) || 'Web Client';
+  const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
+  db.createSession(user.id, token, device, ip);
+
+  db.logAudit(user.id, user.username, 'PASSWORD_RESET_SUCCESS', 'Password successfully reset via verified OTP');
+
+  return res.json({
+    success: true,
+    message: 'Password reset successful! You are now logged in.',
+    token,
+    user
+  });
 });

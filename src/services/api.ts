@@ -77,20 +77,11 @@ export const api = {
       body: JSON.stringify(data)
     });
   },
-  async getSwitchableUsers() {
-    return request<{ users: Array<{ id: string; username: string; displayName: string; avatarUrl: string; bio: string; isAdmin: boolean }> }>('/api/auth/switchable-users');
-  },
-  async switchUser(userId: string) {
-    return request<{ token: string; user: User }>('/api/auth/switch-user', {
-      method: 'POST',
-      body: JSON.stringify({ userId })
-    });
-  },
   async logout() {
     return request<{ success: boolean }>('/api/auth/logout', { method: 'POST' });
   },
   async forgotPassword(identifier: string) {
-    return request<{ success: boolean; message: string; recoveryCode?: string; userId?: string }>('/api/auth/forgot-password', {
+    return request<{ success: boolean; message: string; userId?: string }>('/api/auth/forgot-password', {
       method: 'POST',
       body: JSON.stringify({ identifier })
     });
@@ -141,6 +132,9 @@ export const api = {
   },
   async getSessions() {
     return request<{ sessions: Array<{ id: string; device: string; browser: string; ip: string; current: boolean; lastActive: string }> }>('/api/users/me/sessions');
+  },
+  async revokeSession(sessionId: string) {
+    return request<{ success: boolean; message: string }>(`/api/users/me/sessions/${sessionId}`, { method: 'DELETE' });
   },
   async logoutAllDevices() {
     return request<{ success: boolean; message: string }>('/api/users/me/logout-all-devices', { method: 'POST' });
@@ -400,5 +394,34 @@ export const api = {
   },
   async getAdminAuditLogs() {
     return request<{ logs: any[] }>('/api/admin/audit-logs');
+  },
+
+  // Circle Signature Features
+  async getCircleStatus() {
+    return request<{ circleMembers: any[] }>('/api/features/circle-status');
+  },
+  async getPlans() {
+    return request<{ plans: any[] }>('/api/features/plans');
+  },
+  async createPlan(data: { title: string; emoji?: string; scheduledTime: string; location?: string }) {
+    return request<{ plan: any }>('/api/features/plans', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+  async rsvpPlan(planId: string, status: 'attending' | 'maybe' | 'declined') {
+    return request<{ success: boolean; message: string }>(`/api/features/plans/${planId}/rsvp`, {
+      method: 'POST',
+      body: JSON.stringify({ status })
+    });
+  },
+  async getMemoryCapsules() {
+    return request<{ capsules: any[] }>('/api/features/capsules');
+  },
+  async createMemoryCapsule(data: { title: string; coverEmoji?: string; unlockAt?: string; items?: any[] }) {
+    return request<{ capsule: any }>('/api/features/capsules', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
   }
 };

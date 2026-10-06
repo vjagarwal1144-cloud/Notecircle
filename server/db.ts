@@ -45,20 +45,58 @@ export interface DatabaseSchema {
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const DB_FILE = path.resolve(DATA_DIR, 'notecircle.db');
 
+const SERVER_SECRET_KEY = process.env.SESSION_SECRET || 'notecircle_prod_session_secret_p98afy2938fhas98dha9sd8';
+
 export function hashPassword(password: string): string {
-  const salt = 'notecircle_secure_salt_2026';
-  return crypto.pbkdf2Sync(password, salt, 1000, 32, 'sha256').toString('hex');
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derived = crypto.scryptSync(password, salt, 32, { N: 16384, r: 8, p: 1 });
+  return `scrypt:v1:${salt}:${derived.toString('hex')}`;
+}
+
+export function verifyPassword(password: string, storedHash: string): boolean {
+  if (!storedHash) return false;
+  // Handle scrypt:v1:salt:hash format
+  if (storedHash.startsWith('scrypt:v1:')) {
+    const parts = storedHash.split(':');
+    if (parts.length !== 4) return false;
+    const [, , salt, hash] = parts;
+    const derived = crypto.scryptSync(password, salt, 32, { N: 16384, r: 8, p: 1 });
+    return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), derived);
+  }
+  // Legacy migration check (if old hex hash exists)
+  try {
+    const oldDerived = crypto.pbkdf2Sync(password, 'notecircle_secure_salt_2026', 1000, 32, 'sha256').toString('hex');
+    return crypto.timingSafeEqual(Buffer.from(storedHash, 'hex'), Buffer.from(oldDerived, 'hex'));
+  } catch {
+    return false;
+  }
 }
 
 export function generateToken(userId: string): string {
-  const payload = `${userId}:${Date.now()}:${crypto.randomBytes(16).toString('hex')}`;
-  return Buffer.from(payload).toString('base64');
+  const ts = Date.now().toString();
+  const rand = crypto.randomBytes(16).toString('hex');
+  const payload = `${userId}:${ts}:${rand}`;
+  const hmac = crypto.createHmac('sha256', SERVER_SECRET_KEY).update(payload).digest('hex');
+  return Buffer.from(`${payload}:${hmac}`).toString('base64url');
 }
 
 export function parseToken(token: string): string | null {
   try {
-    const raw = Buffer.from(token, 'base64').toString('utf8');
-    const [userId] = raw.split(':');
+    if (!token) return null;
+    const raw = Buffer.from(token, 'base64url').toString('utf8');
+    const parts = raw.split(':');
+    if (parts.length !== 4) return null;
+    const [userId, ts, rand, hmac] = parts;
+    const payload = `${userId}:${ts}:${rand}`;
+    const expectedHmac = crypto.createHmac('sha256', SERVER_SECRET_KEY).update(payload).digest('hex');
+    if (!crypto.timingSafeEqual(Buffer.from(hmac, 'hex'), Buffer.from(expectedHmac, 'hex'))) {
+      return null;
+    }
+    // Expire token after 30 days
+    const createdTime = parseInt(ts, 10);
+    if (isNaN(createdTime) || Date.now() - createdTime > 30 * 24 * 60 * 60 * 1000) {
+      return null;
+    }
     return userId || null;
   } catch {
     return null;
@@ -248,6 +286,37 @@ class SqlDatabaseManager {
         last_active TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS password_recovery_requests (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        code_hash TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        attempts INTEGER DEFAULT 0,
+        used INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS plans (
+        id TEXT PRIMARY KEY,
+        creator_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        emoji TEXT NOT NULL,
+        scheduled_time TEXT NOT NULL,
+        location TEXT,
+        rsvps TEXT DEFAULT '[]',
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS memory_capsules (
+        id TEXT PRIMARY KEY,
+        creator_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        cover_emoji TEXT NOT NULL,
+        unlock_at TEXT,
+        items TEXT DEFAULT '[]',
+        created_at TEXT NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS device_public_keys (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -266,13 +335,12 @@ class SqlDatabaseManager {
       CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages (conversation_id);
       CREATE INDEX IF NOT EXISTS idx_notifs_recip ON notifications (recipient_id);
       CREATE INDEX IF NOT EXISTS idx_device_keys_user ON device_public_keys (user_id);
+      CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions (token);
+      CREATE INDEX IF NOT EXISTS idx_recovery_user ON password_recovery_requests (user_id);
     `);
   }
 
   private seedInitialIfEmpty(): void {
-    const userCount = (this.sqlite.prepare('SELECT count(*) as count FROM users;').get() as any)?.count || 0;
-    if (userCount > 0) return;
-
     const now = new Date();
     const inTwoDays = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
     const inEightHours = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString();
@@ -469,7 +537,7 @@ class SqlDatabaseManager {
     ];
 
     const insertUser = this.sqlite.prepare(`
-      INSERT INTO users (
+      INSERT OR IGNORE INTO users (
         id, username, display_name, email, phone, avatar_url, bio, city, birthday, workplace,
         is_private, is_admin, is_suspended, availability, privacy_settings, notification_settings, password_hash, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
@@ -498,24 +566,26 @@ class SqlDatabaseManager {
       );
     }
 
-    // Seed initial follow connection: Rahul & Priya are mutual followers
+    // Seed initial follow connections: Rahul & Priya are mutual followers; Amit follows Rahul
     const insertConn = this.sqlite.prepare(`
-      INSERT INTO connections (id, requester_id, target_id, status, created_at, updated_at)
+      INSERT OR IGNORE INTO connections (id, requester_id, target_id, status, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?);
     `);
     insertConn.run('conn_rp_1', 'usr_rahul', 'usr_priya', 'ACCEPTED', now.toISOString(), now.toISOString());
     insertConn.run('conn_pr_1', 'usr_priya', 'usr_rahul', 'ACCEPTED', now.toISOString(), now.toISOString());
+    insertConn.run('conn_ar_1', 'usr_amit', 'usr_rahul', 'ACCEPTED', now.toISOString(), now.toISOString());
 
     // Close friends
     const insertCf = this.sqlite.prepare(`
-      INSERT INTO close_friends (id, user_id, friend_id, created_at)
+      INSERT OR IGNORE INTO close_friends (id, user_id, friend_id, created_at)
       VALUES (?, ?, ?, ?);
     `);
     insertCf.run('cf_rp_1', 'usr_rahul', 'usr_priya', now.toISOString());
+    insertCf.run('cf_pr_1', 'usr_priya', 'usr_rahul', now.toISOString());
 
-    // Initial note
+    // Seed notes
     const insertNote = this.sqlite.prepare(`
-      INSERT INTO notes (
+      INSERT OR IGNORE INTO notes (
         id, user_id, author, emoji, category, category_label, text, audience, selected_user_ids,
         expires_at, scheduled_for, status, is_pinned, is_draft, allow_replies, allow_reactions, reactions, replies, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
@@ -526,6 +596,13 @@ class SqlDatabaseManager {
       username: 'rahul',
       displayName: 'Rahul Sharma',
       avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80'
+    };
+
+    const priyaAuthor = {
+      id: 'usr_priya',
+      username: 'priya',
+      displayName: 'Priya Patel',
+      avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&h=256&q=80'
     };
 
     insertNote.run(
@@ -572,22 +649,123 @@ class SqlDatabaseManager {
       null
     );
 
+    insertNote.run(
+      'note_seed_2',
+      'usr_priya',
+      JSON.stringify(priyaAuthor),
+      '🏺',
+      'study',
+      'Studio Workshop',
+      'Glazing and firing porcelain ceramics at Studio Clay today. Offline till evening! ☕✨',
+      'followers',
+      null,
+      inEightHours,
+      null,
+      'ACTIVE',
+      1,
+      0,
+      1,
+      1,
+      JSON.stringify([
+        {
+          id: 'rx_seed_2',
+          noteId: 'note_seed_2',
+          userId: 'usr_rahul',
+          username: 'rahul',
+          displayName: 'Rahul Sharma',
+          emoji: '👏',
+          createdAt: now.toISOString()
+        }
+      ]),
+      JSON.stringify([]),
+      now.toISOString(),
+      null
+    );
+
     // Initial conversation
     const insertConv = this.sqlite.prepare(`
-      INSERT INTO conversations (id, type, title, participant_ids, last_message, unread_count, is_muted, is_archived, is_pinned, created_at, updated_at)
+      INSERT OR IGNORE INTO conversations (id, type, title, participant_ids, last_message, unread_count, is_muted, is_archived, is_pinned, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     `);
+
+    const initialMsgObj = {
+      id: 'msg_seed_1',
+      conversationId: 'conv_rp_seed',
+      senderId: 'usr_priya',
+      senderName: 'Priya Patel',
+      senderAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&h=256&q=80',
+      text: 'Hey Rahul! Saw your note about Coorg. Have an amazing, relaxing time with family! 🏕️',
+      reactions: [],
+      status: 'DELIVERED',
+      createdAt: now.toISOString()
+    };
+
     insertConv.run(
       'conv_rp_seed',
       'direct',
       null,
       JSON.stringify(['usr_rahul', 'usr_priya']),
-      null,
+      JSON.stringify(initialMsgObj),
       0,
       0,
       0,
       0,
       now.toISOString(),
+      now.toISOString()
+    );
+
+    // Initial message
+    const insertMsg = this.sqlite.prepare(`
+      INSERT OR IGNORE INTO messages (id, conversation_id, sender_id, sender_name, sender_avatar, text, encrypted_payload, reactions, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    `);
+    insertMsg.run(
+      'msg_seed_1',
+      'conv_rp_seed',
+      'usr_priya',
+      'Priya Patel',
+      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&h=256&q=80',
+      'Hey Rahul! Saw your note about Coorg. Have an amazing, relaxing time with family! 🏕️',
+      null,
+      JSON.stringify([]),
+      'DELIVERED',
+      now.toISOString()
+    );
+
+    // Initial Plan
+    const insertPlan = this.sqlite.prepare(`
+      INSERT OR IGNORE INTO plans (id, creator_id, title, emoji, scheduled_time, location, rsvps, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+    `);
+    insertPlan.run(
+      'plan_seed_1',
+      'usr_priya',
+      'Sunday Morning Farmers Market & Chai',
+      '☕',
+      'Sunday at 9:30 AM',
+      'Koramangala Community Market',
+      JSON.stringify([
+        { userId: 'usr_priya', displayName: 'Priya Patel', status: 'attending', respondedAt: now.toISOString() },
+        { userId: 'usr_rahul', displayName: 'Rahul Sharma', status: 'attending', respondedAt: now.toISOString() }
+      ]),
+      now.toISOString()
+    );
+
+    // Initial Memory Capsule
+    const insertCapsule = this.sqlite.prepare(`
+      INSERT OR IGNORE INTO memory_capsules (id, creator_id, title, cover_emoji, unlock_at, items, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?);
+    `);
+    insertCapsule.run(
+      'capsule_seed_1',
+      'usr_rahul',
+      'Summer Mountain Expedition 🌲',
+      '⛰️',
+      inTwoDays,
+      JSON.stringify([
+        { type: 'note', text: 'Pack rain gear and hiking poles before dawn.' },
+        { type: 'quote', text: 'The mountains are calling.' }
+      ]),
       now.toISOString()
     );
   }
@@ -845,7 +1023,7 @@ class SqlDatabaseManager {
               JSON.stringify(u.availability || {}),
               JSON.stringify(u.privacySettings || {}),
               JSON.stringify(u.notificationSettings || {}),
-              (u as any).passwordHash || hashPassword('password123'),
+              (u as any).passwordHash || '',
               u.createdAt
             );
           }
@@ -1126,8 +1304,178 @@ class SqlDatabaseManager {
       DELETE FROM blocks;
       DELETE FROM mutes;
       DELETE FROM sessions;
+      DELETE FROM password_recovery_requests;
+      DELETE FROM plans;
+      DELETE FROM memory_capsules;
     `);
     this.seedInitialIfEmpty();
+  }
+
+  // --- Session Management (Direct SQL) ---
+  public createSession(userId: string, token: string, device: string, ip: string): void {
+    const id = `sess_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const now = new Date().toISOString();
+    const stmt = this.sqlite.prepare(`
+      INSERT INTO sessions (id, user_id, token, device, ip, created_at, last_active)
+      VALUES (?, ?, ?, ?, ?, ?, ?);
+    `);
+    stmt.run(id, userId, token, device, ip, now, now);
+  }
+
+  public getSessionByToken(token: string): { id: string; userId: string; device: string; ip: string; lastActive: string } | null {
+    const row = this.sqlite.prepare('SELECT * FROM sessions WHERE token = ?;').get(token) as any;
+    if (!row) return null;
+    return {
+      id: row.id,
+      userId: row.user_id,
+      device: row.device,
+      ip: row.ip,
+      lastActive: row.last_active
+    };
+  }
+
+  public touchSession(token: string): void {
+    const now = new Date().toISOString();
+    this.sqlite.prepare('UPDATE sessions SET last_active = ? WHERE token = ?;').run(now, token);
+  }
+
+  public deleteSessionByToken(token: string): void {
+    this.sqlite.prepare('DELETE FROM sessions WHERE token = ?;').run(token);
+  }
+
+  public deleteSessionById(id: string, userId: string): void {
+    this.sqlite.prepare('DELETE FROM sessions WHERE id = ? AND user_id = ?;').run(id, userId);
+  }
+
+  public deleteAllSessionsForUser(userId: string, exceptToken?: string): void {
+    if (exceptToken) {
+      this.sqlite.prepare('DELETE FROM sessions WHERE user_id = ? AND token != ?;').run(userId, exceptToken);
+    } else {
+      this.sqlite.prepare('DELETE FROM sessions WHERE user_id = ?;').run(userId);
+    }
+  }
+
+  public getUserSessions(userId: string, currentToken?: string): Array<{ id: string; device: string; ip: string; current: boolean; lastActive: string }> {
+    const rows = this.sqlite.prepare('SELECT * FROM sessions WHERE user_id = ? ORDER BY last_active DESC;').all(userId) as any[];
+    return rows.map((r) => ({
+      id: r.id,
+      device: r.device,
+      ip: r.ip,
+      current: r.token === currentToken,
+      lastActive: r.last_active
+    }));
+  }
+
+  // --- Password Recovery Requests ---
+  public createPasswordRecovery(userId: string, codeHash: string, expiresInMinutes = 15): string {
+    const id = `rec_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000).toISOString();
+    const now = new Date().toISOString();
+    // Invalidate prior requests for this user
+    this.sqlite.prepare('UPDATE password_recovery_requests SET used = 1 WHERE user_id = ? AND used = 0;').run(userId);
+    this.sqlite.prepare(`
+      INSERT INTO password_recovery_requests (id, user_id, code_hash, expires_at, attempts, used, created_at)
+      VALUES (?, ?, ?, ?, 0, 0, ?);
+    `).run(id, userId, codeHash, expiresAt, now);
+    return id;
+  }
+
+  public getActiveRecoveryRequest(userId: string): any {
+    const now = new Date().toISOString();
+    return this.sqlite.prepare(`
+      SELECT * FROM password_recovery_requests
+      WHERE user_id = ? AND used = 0 AND expires_at > ? AND attempts < 5
+      ORDER BY created_at DESC LIMIT 1;
+    `).get(userId, now);
+  }
+
+  public incrementRecoveryAttempt(id: string): void {
+    this.sqlite.prepare('UPDATE password_recovery_requests SET attempts = attempts + 1 WHERE id = ?;').run(id);
+  }
+
+  public markRecoveryUsed(id: string): void {
+    this.sqlite.prepare('UPDATE password_recovery_requests SET used = 1 WHERE id = ?;').run(id);
+  }
+
+  // --- Direct SQL for Users ---
+  public updateUserPassword(userId: string, newPasswordHash: string): void {
+    this.sqlite.prepare('UPDATE users SET password_hash = ? WHERE id = ?;').run(newPasswordHash, userId);
+  }
+
+  public purgeUserData(userId: string): void {
+    this.sqlite.exec('BEGIN TRANSACTION;');
+    try {
+      this.sqlite.prepare('DELETE FROM users WHERE id = ?;').run(userId);
+      this.sqlite.prepare('DELETE FROM notes WHERE user_id = ?;').run(userId);
+      this.sqlite.prepare('DELETE FROM connections WHERE requester_id = ? OR target_id = ?;').run(userId, userId);
+      this.sqlite.prepare('DELETE FROM close_friends WHERE user_id = ? OR friend_id = ?;').run(userId, userId);
+      this.sqlite.prepare('DELETE FROM sessions WHERE user_id = ?;').run(userId);
+      this.sqlite.prepare('DELETE FROM device_public_keys WHERE user_id = ?;').run(userId);
+      this.sqlite.prepare('DELETE FROM blocks WHERE user_id = ? OR blocked_user_id = ?;').run(userId, userId);
+      this.sqlite.prepare('DELETE FROM mutes WHERE user_id = ? OR muted_user_id = ?;').run(userId, userId);
+      this.sqlite.prepare('DELETE FROM password_recovery_requests WHERE user_id = ?;').run(userId);
+      this.sqlite.exec('COMMIT;');
+    } catch (err) {
+      this.sqlite.exec('ROLLBACK;');
+      throw err;
+    }
+  }
+
+  // --- Plans (Signature Feature) ---
+  public getPlansForUser(userId: string): any[] {
+    const rows = this.sqlite.prepare('SELECT * FROM plans ORDER BY scheduled_time ASC;').all() as any[];
+    return rows.map((r) => ({
+      id: r.id,
+      creatorId: r.creator_id,
+      title: r.title,
+      emoji: r.emoji,
+      scheduledTime: r.scheduled_time,
+      location: r.location,
+      rsvps: JSON.parse(r.rsvps || '[]'),
+      createdAt: r.created_at
+    }));
+  }
+
+  public createPlan(plan: { id: string; creatorId: string; title: string; emoji: string; scheduledTime: string; location?: string }): void {
+    this.sqlite.prepare(`
+      INSERT INTO plans (id, creator_id, title, emoji, scheduled_time, location, rsvps, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, '[]', ?);
+    `).run(plan.id, plan.creatorId, plan.title, plan.emoji, plan.scheduledTime, plan.location || null, new Date().toISOString());
+  }
+
+  public updatePlanRsvp(planId: string, userId: string, username: string, status: 'attending' | 'maybe' | 'declined'): void {
+    const row = this.sqlite.prepare('SELECT rsvps FROM plans WHERE id = ?;').get(planId) as any;
+    if (!row) return;
+    const rsvps = JSON.parse(row.rsvps || '[]');
+    const existingIdx = rsvps.findIndex((r: any) => r.userId === userId);
+    if (existingIdx >= 0) {
+      rsvps[existingIdx].status = status;
+      rsvps[existingIdx].updatedAt = new Date().toISOString();
+    } else {
+      rsvps.push({ userId, username, status, updatedAt: new Date().toISOString() });
+    }
+    this.sqlite.prepare('UPDATE plans SET rsvps = ? WHERE id = ?;').run(JSON.stringify(rsvps), planId);
+  }
+
+  // --- Memory Capsules (Signature Feature) ---
+  public getMemoryCapsules(userId: string): any[] {
+    const rows = this.sqlite.prepare('SELECT * FROM memory_capsules ORDER BY created_at DESC;').all() as any[];
+    return rows.map((r) => ({
+      id: r.id,
+      creatorId: r.creator_id,
+      title: r.title,
+      coverEmoji: r.cover_emoji,
+      unlockAt: r.unlock_at,
+      items: JSON.parse(r.items || '[]'),
+      createdAt: r.created_at
+    }));
+  }
+
+  public createMemoryCapsule(capsule: { id: string; creatorId: string; title: string; coverEmoji: string; unlockAt?: string; items: any[] }): void {
+    this.sqlite.prepare(`
+      INSERT INTO memory_capsules (id, creator_id, title, cover_emoji, unlock_at, items, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?);
+    `).run(capsule.id, capsule.creatorId, capsule.title, capsule.coverEmoji, capsule.unlockAt || null, JSON.stringify(capsule.items || []), new Date().toISOString());
   }
 }
 

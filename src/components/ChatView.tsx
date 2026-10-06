@@ -17,7 +17,7 @@ import {
   Users,
   MoreVertical
 } from 'lucide-react';
-import { api } from '../services/api.ts';
+import { api, getStoredToken } from '../services/api.ts';
 import { localDb } from '../services/localDb.ts';
 import { 
   encryptClientPayload, 
@@ -157,10 +157,82 @@ export const ChatView: React.FC<ChatViewProps> = ({ initialUserId }) => {
 
     loadChatMessages();
 
-    const interval = setInterval(loadChatMessages, 4000);
+    // Authenticated WebSocket connection for instantaneous realtime chat
+    let ws: WebSocket | null = null;
+    let wsReconnectTimeout: any = null;
+    const token = getStoredToken();
+
+    function connectWs() {
+      if (!token) return;
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
+      ws = new WebSocket(wsUrl);
+
+      ws.onmessage = async (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.event === 'new_message' && data.payload?.conversationId === activeConvId) {
+            const incomingMsg: Message = data.payload.message;
+            const activeConv = conversations.find((c) => c.id === activeConvId);
+            const convSecret = activeConv?.participantIds && activeConv.participantIds.length > 0
+              ? deriveConversationSecret(activeConv.participantIds)
+              : 'notecircle_secure_channel';
+
+            let plain = incomingMsg.text;
+            if (incomingMsg.encryptedPayload) {
+              try {
+                plain = await decryptClientPayload(incomingMsg.encryptedPayload, convSecret);
+              } catch {}
+            }
+            const decryptedMsg = { ...incomingMsg, text: plain };
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === decryptedMsg.id)) return prev;
+              return [...prev, decryptedMsg];
+            });
+            await localDb.saveMessage(decryptedMsg);
+            scrollToBottom();
+
+            // Acknowledge read if recipient is viewer
+            if (decryptedMsg.senderId !== currentUser?.id) {
+              api.ackMessageDelivery(activeConvId!, [decryptedMsg.id]).catch(() => {});
+            }
+          } else if (data.event === 'message_deleted' && data.payload?.conversationId === activeConvId) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === data.payload.messageId
+                  ? { ...m, isDeleted: true, text: 'This message was deleted.' }
+                  : m
+              )
+            );
+          } else if (data.event === 'message_reaction' && data.payload?.conversationId === activeConvId) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === data.payload.messageId ? { ...m, reactions: data.payload.reactions } : m
+              )
+            );
+          }
+        } catch {}
+      };
+
+      ws.onclose = () => {
+        if (isMounted) {
+          wsReconnectTimeout = setTimeout(connectWs, 3000);
+        }
+      };
+    }
+
+    connectWs();
+
+    // Secondary fallback polling at 12s in case of connection drop
+    const interval = setInterval(loadChatMessages, 12000);
     return () => {
       isMounted = false;
       clearInterval(interval);
+      if (wsReconnectTimeout) clearTimeout(wsReconnectTimeout);
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+      }
     };
   }, [activeConvId]);
 

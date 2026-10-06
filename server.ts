@@ -1,6 +1,8 @@
 import express from 'express';
+import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { WebSocketServer } from 'ws';
 import { authRouter } from './server/routes/auth.ts';
 import { usersRouter } from './server/routes/users.ts';
 import { connectionsRouter } from './server/routes/connections.ts';
@@ -12,11 +14,14 @@ import { bugsRouter } from './server/routes/bugs.ts';
 import { supportRouter } from './server/routes/support.ts';
 import { cryptoKeysRouter } from './server/routes/cryptoKeys.ts';
 import { adminRouter } from './server/routes/admin.ts';
+import { featuresRouter } from './server/routes/features.ts';
+import { realtimeHub } from './server/realtime.ts';
+import { parseToken, db } from './server/db.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// In-Memory Rate Limiter (sliding window per IP)
+// In-Memory Rate Limiter (sliding window per IP/endpoint)
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 function createRateLimiter(maxRequests: number, windowMs: number) {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -45,6 +50,7 @@ function createRateLimiter(maxRequests: number, windowMs: number) {
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
+  const server = http.createServer(app);
 
   // Production Security Headers
   app.use((_req, res, next) => {
@@ -75,10 +81,58 @@ async function startServer() {
   app.use('/api/reports', reportsRouter);
   app.use('/api/bugs', bugsRouter);
   app.use('/api/support', supportRouter);
+  app.use('/api/features', featuresRouter);
 
   // Health check endpoint
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', service: 'NoteCircle API', time: new Date().toISOString() });
+  });
+
+  // WebSocket Server Setup with authenticated handshake
+  const wss = new WebSocketServer({ server, path: '/ws' });
+
+  wss.on('connection', (ws: any, req: http.IncomingMessage) => {
+    const url = new URL(req.url || '', `http://${req.headers.host}`);
+    const token = url.searchParams.get('token');
+    const deviceId = url.searchParams.get('deviceId') || undefined;
+
+    if (!token) {
+      ws.close(4001, 'Unauthorized: Token required');
+      return;
+    }
+
+    const userId = parseToken(token);
+    const session = db.getSessionByToken(token);
+    if (!userId || !session) {
+      ws.close(4001, 'Unauthorized: Invalid session');
+      return;
+    }
+
+    const client = realtimeHub.register(userId, ws, deviceId);
+
+    ws.on('message', (data: any) => {
+      try {
+        const parsed = JSON.parse(data.toString());
+        if (parsed.type === 'ping') {
+          ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+        }
+      } catch {}
+    });
+
+    ws.on('close', () => {
+      realtimeHub.unregister(client);
+    });
+
+    ws.on('error', () => {
+      realtimeHub.unregister(client);
+    });
+
+    // Send initial handshake acknowledgement
+    ws.send(JSON.stringify({
+      event: 'connected',
+      payload: { userId, status: 'online' },
+      timestamp: new Date().toISOString()
+    }));
   });
 
   // Vite integration
@@ -98,8 +152,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`NoteCircle full-stack server running on http://0.0.0.0:${PORT}`);
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`NoteCircle full-stack server running with WebSocket on http://0.0.0.0:${PORT}`);
   });
 }
 

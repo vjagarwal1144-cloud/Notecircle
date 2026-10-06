@@ -12,8 +12,7 @@ interface AuthContextType {
   login: (identifier: string, pass: string) => Promise<void>;
   register: (data: any) => Promise<void>;
   logout: () => Promise<void>;
-  switchUser: (userId: string) => Promise<void>;
-  switchableUsers: Array<{ id: string; username: string; displayName: string; avatarUrl: string; bio: string; isAdmin: boolean }>;
+  switchUser: (username: string) => Promise<void>;
   unreadNotifsCount: number;
   refreshNotifications: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -29,7 +28,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [switchableUsers, setSwitchableUsers] = useState<any[]>([]);
   const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
   const [androidPreview, setAndroidPreview] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -86,15 +84,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const fetchSwitchableUsers = useCallback(async () => {
-    try {
-      const res = await api.getSwitchableUsers();
-      setSwitchableUsers(res.users);
-    } catch (err) {
-      console.error('Failed to load test users:', err);
-    }
-  }, []);
-
   const refreshNotifications = useCallback(async () => {
     if (!currentUser || !navigator.onLine) return;
     try {
@@ -117,39 +106,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     async function init() {
       setIsLoading(true);
-      await fetchSwitchableUsers();
 
       const existingToken = getStoredToken();
+      const userLoggedOut = localStorage.getItem('notecircle_logged_out') === 'true';
+
       if (existingToken) {
         try {
           const res = await api.getCurrentUser();
           setCurrentUser(res.user);
         } catch {
-          setStoredToken(null);
-          try {
-            const loginRes = await api.switchUser('usr_rahul');
-            setStoredToken(loginRes.token);
-            setCurrentUser(loginRes.user);
-          } catch {}
+          // Token expired or revoked; attempt automatic demo sign-in if not explicitly logged out
+          if (!userLoggedOut) {
+            try {
+              const res = await api.login('rahul', 'password123');
+              setStoredToken(res.token);
+              setCurrentUser(res.user);
+            } catch {
+              setStoredToken(null);
+              setCurrentUser(null);
+            }
+          } else {
+            setStoredToken(null);
+            setCurrentUser(null);
+          }
+        }
+      } else if (!userLoggedOut) {
+        // First-time visit: default seamlessly to Rahul Sharma so full circle experience is active
+        try {
+          const res = await api.login('rahul', 'password123');
+          setStoredToken(res.token);
+          setCurrentUser(res.user);
+        } catch {
+          setCurrentUser(null);
         }
       } else {
-        try {
-          const loginRes = await api.switchUser('usr_rahul');
-          setStoredToken(loginRes.token);
-          setCurrentUser(loginRes.user);
-        } catch {}
+        setCurrentUser(null);
       }
 
       setIsLoading(false);
     }
 
     init();
-  }, [fetchSwitchableUsers]);
+  }, []);
 
   useEffect(() => {
     if (currentUser) {
       refreshNotifications();
-      const interval = setInterval(refreshNotifications, 10000);
+      const interval = setInterval(refreshNotifications, 15000);
       return () => clearInterval(interval);
     }
   }, [currentUser, refreshNotifications]);
@@ -157,10 +160,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (identifier: string, pass: string) => {
     setIsLoading(true);
     try {
+      localStorage.removeItem('notecircle_logged_out');
       const res = await api.login(identifier, pass);
       setStoredToken(res.token);
       setCurrentUser(res.user);
-      await fetchSwitchableUsers();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const switchUser = async (username: string) => {
+    setIsLoading(true);
+    try {
+      localStorage.removeItem('notecircle_logged_out');
+      const res = await api.login(username, 'password123');
+      setStoredToken(res.token);
+      setCurrentUser(res.user);
     } finally {
       setIsLoading(false);
     }
@@ -169,10 +184,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (data: any) => {
     setIsLoading(true);
     try {
+      localStorage.removeItem('notecircle_logged_out');
       const res = await api.register(data);
       setStoredToken(res.token);
       setCurrentUser(res.user);
-      await fetchSwitchableUsers();
     } finally {
       setIsLoading(false);
     }
@@ -180,23 +195,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
+      localStorage.setItem('notecircle_logged_out', 'true');
       await api.logout();
       await localDb.clearAllLocalData();
     } catch {}
     setStoredToken(null);
     setCurrentUser(null);
-  };
-
-  const switchUser = async (userId: string) => {
-    setIsLoading(true);
-    try {
-      const res = await api.switchUser(userId);
-      setStoredToken(res.token);
-      setCurrentUser(res.user);
-      await refreshNotifications();
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const updateAvailability = async (availData: Partial<UserAvailability>) => {
@@ -220,7 +224,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         switchUser,
-        switchableUsers,
         unreadNotifsCount,
         refreshNotifications,
         refreshUser,

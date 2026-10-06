@@ -46,9 +46,8 @@ export const Navigation: React.FC<NavigationProps> = ({
     isOnline,
     isDarkMode,
     toggleDarkMode,
-    switchableUsers, 
-    switchUser, 
     logout, 
+    switchUser,
     unreadNotifsCount, 
     androidPreview, 
     toggleAndroidPreview 
@@ -267,28 +266,67 @@ export const Navigation: React.FC<NavigationProps> = ({
                     </button>
                   </div>
 
-                  <div className="border-t border-stone-200/50 dark:border-stone-800 px-3 pt-2 pb-1">
-                    <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mb-1.5">
-                      Switch Test Perspective
+                  <div className="border-t border-stone-200/50 dark:border-stone-800 pt-1.5 pb-1">
+                    <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                      Switch Test Persona
                     </p>
-                    <div className="space-y-1 max-h-40 overflow-y-auto">
-                      {switchableUsers.map((u) => (
-                        <button
-                          key={u.id}
-                          onClick={() => switchUser(u.id)}
-                          className={`w-full text-left px-2 py-1 rounded-md text-xs flex items-center justify-between transition-colors ${
-                            currentUser?.id === u.id
-                              ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 font-semibold'
-                              : 'hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 truncate">
-                            <UserAvatar name={u.displayName} src={u.avatarUrl} size="xs" />
-                            <span className="truncate">{u.displayName}</span>
-                          </div>
-                          {currentUser?.id === u.id && <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
-                        </button>
-                      ))}
+                    <div className="grid grid-cols-2 gap-1 px-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          switchUser('rahul');
+                          setShowUserDropdown(false);
+                        }}
+                        className={`text-left px-2 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
+                          currentUser?.username === 'rahul'
+                            ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 font-bold'
+                            : 'hover:bg-amber-50 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300'
+                        }`}
+                      >
+                        🏕️ Rahul (Main)
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          switchUser('priya');
+                          setShowUserDropdown(false);
+                        }}
+                        className={`text-left px-2 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
+                          currentUser?.username === 'priya'
+                            ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 font-bold'
+                            : 'hover:bg-amber-50 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300'
+                        }`}
+                      >
+                        🏺 Priya (Friend)
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          switchUser('amit');
+                          setShowUserDropdown(false);
+                        }}
+                        className={`text-left px-2 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
+                          currentUser?.username === 'amit'
+                            ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 font-bold'
+                            : 'hover:bg-amber-50 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300'
+                        }`}
+                      >
+                        🎧 Amit (Friend)
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          switchUser('admin');
+                          setShowUserDropdown(false);
+                        }}
+                        className={`text-left px-2 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
+                          currentUser?.username === 'admin'
+                            ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 font-bold'
+                            : 'hover:bg-amber-50 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300'
+                        }`}
+                      >
+                        🛡️ Safety Admin
+                      </button>
                     </div>
                   </div>
 

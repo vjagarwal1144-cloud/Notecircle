@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Clock, Users, Sparkles, MessageCircle, Heart, Shield, Calendar, Pin, FileText } from 'lucide-react';
+import { X, Clock, Users, Sparkles, MessageCircle, Heart, Shield, Calendar, Pin, FileText, Lock } from 'lucide-react';
 import { api } from '../services/api.ts';
 import { localDb } from '../services/localDb.ts';
 import type { NoteCategory, PrivacyAudience } from '../types/index.ts';
@@ -313,6 +313,17 @@ export const CreateNoteModal: React.FC<CreateNoteModalProps> = ({
                 className="w-full text-xs font-medium bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl p-2 text-stone-800 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
               />
             </div>
+          </div>
+
+          {/* Privacy Preview Banner */}
+          <div className="p-2.5 bg-stone-50 dark:bg-stone-850 rounded-2xl border border-stone-200/80 dark:border-stone-750 flex items-center justify-between text-xs text-stone-600 dark:text-stone-300">
+            <div className="flex items-center gap-1.5 font-medium">
+              <Lock className="w-3.5 h-3.5 text-amber-600" />
+              <span>Who can see this?</span>
+            </div>
+            <span className="font-bold text-stone-800 dark:text-stone-200">
+              {audience === 'close_friends' ? 'Only Close Friends' : 'Approved Followers Only'} · Expires in {duration.replace('_', ' ')}
+            </span>
           </div>
 
           {/* Interaction Toggles */}

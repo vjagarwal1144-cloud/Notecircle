@@ -213,31 +213,34 @@ usersRouter.put('/me/credentials', (req, res) => {
   return res.json({ success: true, user: updatedUser });
 });
 
-// GET /api/users/me/sessions (Active sessions)
+// GET /api/users/me/sessions (Active sessions from real database)
 usersRouter.get('/me/sessions', (req, res) => {
   const viewer = getAuthUser(req);
   if (!viewer) return res.status(401).json({ error: 'Unauthorized' });
 
-  const sessions = [
-    {
-      id: 'sess_current',
-      device: 'Current Browser Session',
-      browser: req.headers['user-agent']?.substring(0, 45) || 'Web Client',
-      ip: req.ip || '127.0.0.1',
-      current: true,
-      lastActive: new Date().toISOString()
-    },
-    {
-      id: 'sess_android',
-      device: 'Pixel 8 Companion (Android)',
-      browser: 'NoteCircle Native v1.2',
-      ip: '192.168.1.42',
-      current: false,
-      lastActive: new Date(Date.now() - 3600000).toISOString()
-    }
-  ];
+  const authHeader = req.headers.authorization;
+  const currentToken = authHeader ? authHeader.replace(/^Bearer\s+/, '').trim() : undefined;
+
+  const sessions = db.getUserSessions(viewer.id, currentToken).map((s) => ({
+    id: s.id,
+    device: s.device,
+    browser: s.device,
+    ip: s.ip,
+    current: s.current,
+    lastActive: s.lastActive
+  }));
 
   return res.json({ sessions });
+});
+
+// DELETE /api/users/me/sessions/:sessionId (Revoke specific session)
+usersRouter.delete('/me/sessions/:sessionId', (req, res) => {
+  const viewer = getAuthUser(req);
+  if (!viewer) return res.status(401).json({ error: 'Unauthorized' });
+
+  db.deleteSessionById(req.params.sessionId, viewer.id);
+  db.logAudit(viewer.id, viewer.username, 'SESSION_REVOKED', `Session ID: ${req.params.sessionId}`);
+  return res.json({ success: true, message: 'Session revoked successfully' });
 });
 
 // POST /api/users/me/logout-all-devices
@@ -245,6 +248,11 @@ usersRouter.post('/me/logout-all-devices', (req, res) => {
   const viewer = getAuthUser(req);
   if (!viewer) return res.status(401).json({ error: 'Unauthorized' });
 
+  const authHeader = req.headers.authorization;
+  const currentToken = authHeader ? authHeader.replace(/^Bearer\s+/, '').trim() : undefined;
+
+  // Revoke all except current session
+  db.deleteAllSessionsForUser(viewer.id, currentToken);
   db.logAudit(viewer.id, viewer.username, 'LOGOUT_ALL_DEVICES', 'Terminated all remote companion sessions');
   return res.json({ success: true, message: 'All other remote devices logged out successfully' });
 });
@@ -300,11 +308,7 @@ usersRouter.delete('/me', (req, res) => {
   const viewer = getAuthUser(req);
   if (!viewer) return res.status(401).json({ error: 'Unauthorized' });
 
-  db.update('users', (users) => users.filter((u) => u.id !== viewer.id));
-  db.update('notes', (notes) => notes.filter((n) => n.userId !== viewer.id));
-  db.update('connections', (conns) => conns.filter((c) => c.requesterId !== viewer.id && c.targetId !== viewer.id));
-  db.update('closeFriends', (cfs) => cfs.filter((cf) => cf.userId !== viewer.id && cf.friendId !== viewer.id));
-
-  db.logAudit(viewer.id, viewer.username, 'ACCOUNT_DELETED', 'User account permanently purged');
+  db.purgeUserData(viewer.id);
+  db.logAudit(viewer.id, viewer.username, 'ACCOUNT_DELETED', 'User account permanently purged from NoteCircle');
   return res.json({ success: true, message: 'Your account has been deleted.' });
 });

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db } from '../db.ts';
 import { getAuthUser } from './auth.ts';
 import { canMessage, isBlocked } from '../privacy.ts';
+import { realtimeHub } from '../realtime.ts';
 import type { Conversation, Message, AppNotification } from '../../src/types/index.ts';
 
 export const chatRouter = Router();
@@ -45,7 +46,7 @@ chatRouter.get('/conversations', (req, res) => {
             expiresAt: activeNote.expiresAt,
             isDnd: activeNote.category === 'dnd' || activeNote.category === 'sleep' || activeNote.category === 'family'
           } : undefined,
-          onlineStatus: u.privacySettings?.whoCanSeeOnlineStatus === 'nobody' ? undefined : ('online' as const)
+          onlineStatus: u.privacySettings?.whoCanSeeOnlineStatus === 'nobody' ? undefined : (realtimeHub.isUserOnline(u.id) ? ('online' as const) : undefined)
         };
       });
 
@@ -70,7 +71,7 @@ chatRouter.get('/conversations', (req, res) => {
   return res.json({ conversations: userConversations });
 });
 
-// POST /api/chat/conversations (Open or create 1:1 or Group conversation)
+// POST /api/chat/conversations (Open or create 1:1 or Group conversation with strict validation)
 chatRouter.post('/conversations', (req, res) => {
   const viewer = getAuthUser(req);
   if (!viewer) return res.status(401).json({ error: 'Unauthorized' });
@@ -81,12 +82,31 @@ chatRouter.post('/conversations', (req, res) => {
     if (!participantIds || !Array.isArray(participantIds) || participantIds.length < 2) {
       return res.status(400).json({ error: 'Group chat requires at least 2 other participants' });
     }
-    const allMembers = Array.from(new Set([viewer.id, ...participantIds]));
+
+    // Validate that every invited participant exists, is not blocked, and allows communication
+    const validatedMembers: string[] = [viewer.id];
+    for (const pId of participantIds) {
+      if (pId === viewer.id) continue;
+      const user = db.get('users').find((u) => u.id === pId);
+      if (!user) {
+        return res.status(400).json({ error: `User ${pId} not found` });
+      }
+      if (isBlocked(viewer.id, pId)) {
+        return res.status(403).json({ error: `Cannot add blocked user ${user.displayName} to group` });
+      }
+      const perm = canMessage(viewer.id, pId);
+      if (!perm.allowed) {
+        return res.status(403).json({ error: `Cannot add ${user.displayName}: ${perm.reason}` });
+      }
+      validatedMembers.push(pId);
+    }
+
+    const uniqueMembers = Array.from(new Set(validatedMembers));
     const newGroupConv: Conversation = {
       id: `conv_grp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       type: 'group',
-      title: title || 'Private Group',
-      participantIds: allMembers,
+      title: title?.trim() || 'Private Circle',
+      participantIds: uniqueMembers,
       participants: [],
       unreadCount: 0,
       createdAt: new Date().toISOString(),
@@ -162,7 +182,7 @@ chatRouter.get('/conversations/:id/messages', (req, res) => {
   return res.json({ messages });
 });
 
-// POST /api/chat/conversations/:id/messages (Send message with client-side encryption support)
+// POST /api/chat/conversations/:id/messages (Send message with client-side encryption enforcement)
 chatRouter.post('/conversations/:id/messages', (req, res) => {
   const viewer = getAuthUser(req);
   if (!viewer) return res.status(401).json({ error: 'Unauthorized' });
@@ -211,7 +231,7 @@ chatRouter.post('/conversations/:id/messages', (req, res) => {
   // Reply preview
   let replyPreview = undefined;
   if (replyToId) {
-    const parent = db.get('messages').find((m) => m.id === replyToId);
+    const parent = db.get('messages').find((m) => m.id === replyToId && m.conversationId === convId);
     if (parent) {
       replyPreview = {
         id: parent.id,
@@ -248,6 +268,12 @@ chatRouter.post('/conversations/:id/messages', (req, res) => {
     )
   );
 
+  // Realtime WebSocket broadcast to all online participants in this conversation
+  realtimeHub.broadcastToUsers(conv.participantIds, 'new_message', {
+    conversationId: convId,
+    message: newMsg
+  });
+
   // Notify other participants (Never expose private message content in notification metadata)
   for (const recipientId of otherParticipantIds) {
     const recipient = db.get('users').find((u) => u.id === recipientId);
@@ -265,6 +291,7 @@ chatRouter.post('/conversations/:id/messages', (req, res) => {
         createdAt: new Date().toISOString()
       };
       db.update('notifications', (notifs) => [notif, ...(notifs || [])]);
+      realtimeHub.sendToUser(recipientId, 'new_notification', notif);
     }
   }
 
@@ -286,6 +313,12 @@ chatRouter.delete('/messages/:id', (req, res) => {
 
   if (!msg) return res.status(404).json({ error: 'Message not found' });
 
+  // Verify conversation membership
+  const conv = db.get('conversations').find((c) => c.id === msg.conversationId);
+  if (!conv || !conv.participantIds.includes(viewer.id)) {
+    return res.status(403).json({ error: 'Not authorized for this conversation' });
+  }
+
   if (deleteForEveryone) {
     if (msg.senderId !== viewer.id && !viewer.isAdmin) {
       return res.status(403).json({ error: 'You can only delete your own messages for everyone' });
@@ -303,6 +336,11 @@ chatRouter.delete('/messages/:id', (req, res) => {
           : m
       )
     );
+    realtimeHub.broadcastToUsers(conv.participantIds, 'message_deleted', {
+      conversationId: msg.conversationId,
+      messageId: msgId,
+      forEveryone: true
+    });
   } else {
     // Delete for me
     db.update('messages', (list) =>
@@ -324,6 +362,11 @@ chatRouter.post('/messages/:id/reaction', (req, res) => {
 
   if (!msg) return res.status(404).json({ error: 'Message not found' });
 
+  const conv = db.get('conversations').find((c) => c.id === msg.conversationId);
+  if (!conv || !conv.participantIds.includes(viewer.id)) {
+    return res.status(403).json({ error: 'Not authorized for this conversation' });
+  }
+
   let updatedMsg = msg;
   db.update('messages', (list) =>
     list.map((m) => {
@@ -342,17 +385,28 @@ chatRouter.post('/messages/:id/reaction', (req, res) => {
     })
   );
 
+  realtimeHub.broadcastToUsers(conv.participantIds, 'message_reaction', {
+    conversationId: msg.conversationId,
+    messageId: msgId,
+    reactions: updatedMsg.reactions
+  });
+
   return res.json({ message: updatedMsg });
 });
 
 // POST /api/chat/conversations/:id/ack-delivery
-// Recipients acknowledge local storage in device IndexedDB; backend minimizes server copies
+// Recipients acknowledge local storage in device IndexedDB
 chatRouter.post('/conversations/:id/ack-delivery', (req, res) => {
   const viewer = getAuthUser(req);
   if (!viewer) return res.status(401).json({ error: 'Unauthorized' });
 
   const convId = req.params.id;
   const { messageIds } = req.body;
+
+  const conv = db.get('conversations').find((c) => c.id === convId);
+  if (!conv || !conv.participantIds.includes(viewer.id)) {
+    return res.status(403).json({ error: 'Not authorized for this conversation' });
+  }
 
   if (Array.isArray(messageIds) && messageIds.length > 0) {
     db.update('messages', (list) =>
@@ -363,6 +417,11 @@ chatRouter.post('/conversations/:id/ack-delivery', (req, res) => {
         return m;
       })
     );
+    realtimeHub.broadcastToUsers(conv.participantIds, 'messages_read', {
+      conversationId: convId,
+      messageIds,
+      readerId: viewer.id
+    });
   }
 
   return res.json({ success: true, message: 'Messages acknowledged and synced to device' });

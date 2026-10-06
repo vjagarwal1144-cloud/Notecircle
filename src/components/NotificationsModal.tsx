@@ -9,6 +9,7 @@ interface NotificationsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectAction?: (notif: AppNotification) => void;
+  onOpenChat?: (userId: string) => void;
 }
 
 export const NotificationsModal: React.FC<NotificationsModalProps> = ({

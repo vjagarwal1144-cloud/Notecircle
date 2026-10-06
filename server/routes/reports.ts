@@ -142,9 +142,3 @@ reportsRouter.get('/admin/metrics', (req, res) => {
     }
   });
 });
-
-// POST /api/admin/reset-demo
-reportsRouter.post('/admin/reset-demo', (req, res) => {
-  db.resetToDefault();
-  return res.json({ success: true, message: 'Database reset to default seed state.' });
-});

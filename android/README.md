@@ -1,6 +1,9 @@
-# NoteCircle — Native Android Architecture Specification
+# NoteCircle — Android Architecture Specification & Jetpack Compose Blueprint
 
-This repository contains the complete specification and Jetpack Compose implementation for the native Android application of **NoteCircle**. Both the Android application and the Responsive Web application share the exact same backend API, database schemas, authentication system, privacy validation rules, temporary note expiration engine, and private chat.
+> **Engineering Status**: Architecture Specification & Jetpack Compose Blueprint.
+> *Note: This directory contains the complete technical architecture and Kotlin/Jetpack Compose components for the native Android application. It does not constitute a pre-compiled Gradle/APK build in this repository.*
+
+Both the Native Android application and the Responsive Web application share the exact same backend API, SQLite/WAL database schemas, authenticated session management, privacy validation rules, temporary note expiration engine, and private chat.
 
 ## 1. Android Technology Stack
 - **Language**: Kotlin 2.0+

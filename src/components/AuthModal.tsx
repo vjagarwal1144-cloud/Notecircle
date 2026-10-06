@@ -8,7 +8,7 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
-  const { login, register } = useAuth();
+  const { login, register, switchUser } = useAuth();
   const [isRegister, setIsRegister] = useState(false);
   const [step, setStep] = useState<1 | 2>(1); // Step 1: email/phone, Step 2: details
 
@@ -218,7 +218,61 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           </button>
         </form>
 
-        <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 text-center">
+        {!isRegister && (
+          <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-2 text-center">
+              ⚡ 1-Click Demo Accounts
+            </p>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={async () => {
+                  await switchUser('rahul');
+                  onClose();
+                }}
+                className="p-2 rounded-xl text-left border border-stone-200 dark:border-stone-700 hover:border-amber-500 bg-amber-50/40 dark:bg-amber-950/20 text-xs transition-colors"
+              >
+                <div className="font-semibold text-stone-800 dark:text-stone-200 text-[11px]">🏕️ Rahul Sharma</div>
+                <div className="text-[10px] text-stone-500 dark:text-stone-400">Main Account · Bangalore</div>
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await switchUser('priya');
+                  onClose();
+                }}
+                className="p-2 rounded-xl text-left border border-stone-200 dark:border-stone-700 hover:border-amber-500 bg-amber-50/40 dark:bg-amber-950/20 text-xs transition-colors"
+              >
+                <div className="font-semibold text-stone-800 dark:text-stone-200 text-[11px]">🏺 Priya Patel</div>
+                <div className="text-[10px] text-stone-500 dark:text-stone-400">Ceramicist · Mumbai</div>
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await switchUser('amit');
+                  onClose();
+                }}
+                className="p-2 rounded-xl text-left border border-stone-200 dark:border-stone-700 hover:border-amber-500 bg-stone-50 dark:bg-stone-800/40 text-xs transition-colors"
+              >
+                <div className="font-semibold text-stone-800 dark:text-stone-200 text-[11px]">🎧 Amit Verma</div>
+                <div className="text-[10px] text-stone-500 dark:text-stone-400">Sound Designer · Delhi</div>
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await switchUser('admin');
+                  onClose();
+                }}
+                className="p-2 rounded-xl text-left border border-stone-200 dark:border-stone-700 hover:border-amber-500 bg-stone-50 dark:bg-stone-800/40 text-xs transition-colors"
+              >
+                <div className="font-semibold text-stone-800 dark:text-stone-200 text-[11px]">🛡️ Safety Admin</div>
+                <div className="text-[10px] text-stone-500 dark:text-stone-400">Trust & Ops · SF</div>
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-3 pt-2 text-center">
           <button
             type="button"
             onClick={() => {

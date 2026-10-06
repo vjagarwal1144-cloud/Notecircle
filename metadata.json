@@ -1,0 +1,6 @@
+{
+  "name": "NoteCircle",
+  "description": "Private notes and chat social network for your trusted circle. Stay connected without the noise.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

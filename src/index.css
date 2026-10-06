@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-warm: #FAF8F5;
+    --card-surface: rgba(255, 255, 255, 0.94);
+    --border-warm: rgba(217, 119, 6, 0.12);
+    --shadow-diffuse: 0 10px 30px -5px rgba(180, 83, 9, 0.05), 0 2px 8px -1px rgba(0, 0, 0, 0.03);
+    color-scheme: light;
+  }
+
+  .dark {
+    --bg-warm: #131211;
+    --card-surface: rgba(28, 26, 24, 0.94);
+    --border-warm: rgba(255, 255, 255, 0.08);
+    --shadow-diffuse: 0 12px 36px -6px rgba(0, 0, 0, 0.5), 0 2px 8px -1px rgba(0, 0, 0, 0.3);
+    color-scheme: dark;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: var(--bg-warm);
+    color: #1C1917;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+
+  .dark body {
+    color: #F5F5F4;
+    background-color: #131211;
+  }
+  
+  h1, h2, h3, h4, .font-display {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
+
+/* NoteCircle Glassmorphism + Neumorphism-Lite System */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(217, 119, 6, 0.12);
+  box-shadow: 0 12px 32px -4px rgba(180, 83, 9, 0.04), 0 0 1px 1px rgba(255, 255, 255, 0.8) inset;
+}
+
+.dark .glass-panel {
+  background: rgba(28, 26, 24, 0.85);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 36px -4px rgba(0, 0, 0, 0.5), 0 0 1px 1px rgba(255, 255, 255, 0.05) inset;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(217, 119, 6, 0.1);
+  box-shadow: 0 6px 24px -2px rgba(180, 83, 9, 0.035), 0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+  border-radius: 22px;
+}
+
+.dark .glass-card {
+  background: rgba(30, 28, 26, 0.92);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 30px -4px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+
+.glass-card-hover {
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 36px -4px rgba(180, 83, 9, 0.07), 0 0 0 1px rgba(255, 255, 255, 1) inset;
+  border-color: rgba(217, 119, 6, 0.24);
+}
+
+.dark .glass-card-hover:hover {
+  box-shadow: 0 16px 40px -4px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.neu-button {
+  background: #ffffff;
+  border: 1px solid rgba(217, 119, 6, 0.15);
+  box-shadow: 0 2px 6px rgba(180, 83, 9, 0.03), 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: all 0.15s ease-out;
+}
+
+.dark .neu-button {
+  background: #252220;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  color: #F5F5F4;
+}
+
+.neu-button:hover {
+  box-shadow: 0 6px 14px rgba(180, 83, 9, 0.07);
+  border-color: rgba(217, 119, 6, 0.3);
+}
+
+.dark .neu-button:hover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.neu-button:active {
+  transform: scale(0.98);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.neu-inset {
+  background: #F4EFEA;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(217, 119, 6, 0.1);
+}
+
+.dark .neu-inset {
+  background: #1A1816;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+/* Floating Dock Navigation Container */
+.floating-dock {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(217, 119, 6, 0.15);
+  box-shadow: 0 16px 40px -6px rgba(180, 83, 9, 0.09), 0 0 1px 1px rgba(255, 255, 255, 0.9) inset;
+}
+
+.dark .floating-dock {
+  background: rgba(24, 22, 20, 0.9);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 40px -6px rgba(0, 0, 0, 0.7), 0 0 1px 1px rgba(255, 255, 255, 0.05) inset;
+}
+
+/* Custom smooth scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(180, 83, 9, 0.2);
+  border-radius: 9999px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(180, 83, 9, 0.35);
+}

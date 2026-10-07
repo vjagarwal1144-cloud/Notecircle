@@ -27,7 +27,7 @@ export const SearchAndConnections: React.FC<SearchAndConnectionsProps> = ({
   onOpenProfile,
   onOpenChatWithUser
 }) => {
-  const { currentUser, refreshNotifications } = useAuth();
+  const { currentUser, refreshNotifications, isUserOnline } = useAuth();
   const [activeTab, setActiveTab] = useState<'search' | 'requests' | 'following'>('search');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<PublicUserProfile[]>([]);
@@ -138,92 +138,90 @@ export const SearchAndConnections: React.FC<SearchAndConnectionsProps> = ({
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
+    <div className="max-w-3xl mx-auto px-3.5 sm:px-4 py-5 space-y-6">
       
-      {/* Top Header & Segmented Navigation */}
-      <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab('search')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeTab === 'search'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'neu-button text-stone-600 dark:text-stone-300 hover:text-stone-900'
-            }`}
-          >
-            <Search className="w-3.5 h-3.5" />
-            <span>Find People</span>
-          </button>
+      {/* Top Header & Neo-Brutalist Segmented Tabs */}
+      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-stone-100 dark:bg-[#12121A] border-2.5 border-stone-900 dark:border-stone-750 rounded-2xl shadow-[3px_3px_0px_#121217]">
+        <button
+          onClick={() => setActiveTab('search')}
+          className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            activeTab === 'search'
+              ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]'
+              : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white'
+          }`}
+        >
+          <Search className="w-3.5 h-3.5 stroke-[2.5]" />
+          <span>Find People</span>
+        </button>
 
-          <button
-            onClick={() => setActiveTab('requests')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeTab === 'requests'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'neu-button text-stone-600 dark:text-stone-300 hover:text-stone-900'
-            }`}
-          >
-            <span>Follow Requests</span>
-            {pendingIncoming.length > 0 && (
-              <span className="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
-                {pendingIncoming.length}
-              </span>
-            )}
-          </button>
+        <button
+          onClick={() => setActiveTab('requests')}
+          className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            activeTab === 'requests'
+              ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]'
+              : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white'
+          }`}
+        >
+          <span>Requests</span>
+          {pendingIncoming.length > 0 && (
+            <span className="w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-black border border-stone-900 flex items-center justify-center">
+              {pendingIncoming.length}
+            </span>
+          )}
+        </button>
 
-          <button
-            onClick={() => setActiveTab('following')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-              activeTab === 'following'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'neu-button text-stone-600 dark:text-stone-300 hover:text-stone-900'
-            }`}
-          >
-            My Connections ({connectionsList.length})
-          </button>
-        </div>
+        <button
+          onClick={() => setActiveTab('following')}
+          className={`w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            activeTab === 'following'
+              ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]'
+              : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white'
+          }`}
+        >
+          <span>Circle ({connectionsList.length})</span>
+        </button>
       </div>
 
       {/* Tab 1: Username Search */}
       {activeTab === 'search' && (
         <div className="space-y-4">
           
-          {/* Search Input Bar */}
+          {/* Neo-Brutalist Search Input Bar */}
           <div className="relative">
-            <Search className="w-4 h-4 text-stone-400 absolute left-4 top-3.5" />
+            <Search className="w-5 h-5 text-stone-500 absolute left-4 top-3.5 stroke-[2.5]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => handleSearchInput(e.target.value)}
-              placeholder="Search by exact username or prefix (e.g. rahul, priya, amit, testuser)..."
-              className="w-full pl-11 pr-10 py-3 text-xs sm:text-sm bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-2xl text-stone-800 dark:text-stone-200 placeholder:text-stone-400 focus:outline-hidden focus:border-amber-500 shadow-xs"
+              placeholder="Search exact username or handle (rahul, priya, test)..."
+              className="w-full pl-12 pr-10 py-3.5 text-xs sm:text-sm font-bold neo-input text-stone-900 dark:text-stone-100 placeholder:text-stone-400"
               autoFocus
             />
             {isSearching && (
-              <Loader2 className="w-4 h-4 text-amber-600 animate-spin absolute right-4 top-3.5" />
+              <Loader2 className="w-5 h-5 text-amber-500 animate-spin absolute right-4 top-3.5" />
             )}
           </div>
 
-          <div className="p-3 bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/40 rounded-2xl flex items-start gap-2.5 text-xs text-amber-950 dark:text-amber-200">
-            <Lock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <div className="leading-snug">
-              <span className="font-semibold">Privacy-First Discovery Guarantee:</span> NoteCircle has zero public explore feeds. Searching a username returns strictly minimal identification (Display Name, @username, Private Account status). No notes, followers, or personal activity are ever exposed to strangers.
+          <div className="p-3.5 bg-amber-100/70 dark:bg-amber-950/40 border-2 border-stone-900 dark:border-stone-750 rounded-2xl flex items-start gap-3 text-xs text-stone-900 dark:text-stone-200 shadow-[2px_2px_0px_#121217]">
+            <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 stroke-[2.5]" />
+            <div className="leading-snug font-medium">
+              <strong className="font-black text-stone-950 dark:text-amber-300">Privacy Guarantee:</strong> NoteCircle has zero public explore feeds. Searching a username returns strictly minimal verification (Display Name, @username, Private Circle status). Your notes are never revealed to strangers.
             </div>
           </div>
 
           {searchError && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-700 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <div className="p-3 bg-rose-200 dark:bg-rose-950/50 border-2 border-stone-900 rounded-2xl text-xs font-bold text-rose-950 dark:text-rose-200 flex items-center gap-2 shadow-[2px_2px_0px_#121217]">
+              <AlertCircle className="w-4 h-4 text-rose-700 shrink-0" />
               <span>{searchError}</span>
             </div>
           )}
 
           {/* Search Results List */}
-          <div className="space-y-2.5 pt-1">
+          <div className="space-y-3 pt-1">
             {isSearching ? (
-              <div className="text-center py-12 text-xs text-stone-400 flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
-                <span>Searching user directory...</span>
+              <div className="text-center py-12 text-xs font-bold text-stone-500 dark:text-stone-400 flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+                <span>Searching directory...</span>
               </div>
             ) : searchResults.length > 0 ? (
               searchResults.map((user) => {
@@ -232,25 +230,25 @@ export const SearchAndConnections: React.FC<SearchAndConnectionsProps> = ({
                 return (
                   <div
                     key={user.id}
-                    className="glass-card rounded-2xl p-4 flex items-center justify-between gap-3 shadow-xs hover:border-amber-300 dark:hover:border-amber-700 transition-all"
+                    className="neo-card bg-white dark:bg-[#161622] rounded-2xl p-4 flex items-center justify-between gap-3 shadow-[4px_4px_0px_#121217] transition-all"
                   >
                     <div 
                       onClick={() => onOpenProfile(user.username)}
-                      className="flex items-center gap-3 cursor-pointer flex-1 min-w-0"
+                      className="flex items-center gap-3.5 cursor-pointer flex-1 min-w-0"
                     >
-                      <UserAvatar name={user.displayName} src={user.avatarUrl} size="md" />
+                      <UserAvatar name={user.displayName} src={user.avatarUrl} size="md" isOnline={isUserOnline(user.id)} />
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className="text-xs sm:text-sm font-bold text-stone-900 dark:text-stone-100 truncate">{user.displayName}</p>
-                          <span className="text-[10px] text-stone-500 dark:text-stone-400 flex items-center gap-0.5 font-medium bg-stone-100 dark:bg-stone-800 px-1.5 py-0.2 rounded-full">
-                            <Lock className="w-2.5 h-2.5" /> Private Account
+                          <p className="text-xs sm:text-sm font-black text-stone-900 dark:text-stone-100 truncate">{user.displayName}</p>
+                          <span className="text-[10px] text-stone-900 dark:text-stone-100 flex items-center gap-0.5 font-bold bg-amber-200 dark:bg-stone-800 border border-stone-900 px-2 py-0.5 rounded-full">
+                            <Lock className="w-2.5 h-2.5 stroke-[2.5]" /> Private
                           </span>
                         </div>
-                        <p className="text-xs text-stone-400">@{user.username}</p>
+                        <p className="text-xs font-bold text-stone-500 dark:text-stone-400">@{user.username}</p>
                         
                         {!user.isConnection && (
-                          <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5 italic">
-                            "Follow to see notes."
+                          <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5 font-medium italic">
+                            "Connect to view their private notes."
                           </p>
                         )}
                       </div>
@@ -259,34 +257,34 @@ export const SearchAndConnections: React.FC<SearchAndConnectionsProps> = ({
                     <div className="shrink-0">
                       {user.isConnection ? (
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-3 py-1.5 rounded-xl font-semibold border border-amber-200 dark:border-amber-800 flex items-center gap-1">
-                            <UserCheck className="w-3.5 h-3.5" />
-                            <span>Following</span>
+                          <span className="text-xs text-stone-950 dark:text-amber-300 bg-amber-300 dark:bg-amber-950/80 px-3 py-1.5 rounded-xl font-black border-2 border-stone-900 flex items-center gap-1 shadow-[2px_2px_0px_#121217]">
+                            <UserCheck className="w-3.5 h-3.5 stroke-[2.5]" />
+                            <span>In Circle</span>
                           </span>
                           <button
                             onClick={() => onOpenChatWithUser(user.id)}
-                            className="px-3 py-1.5 rounded-xl neu-button text-xs font-semibold text-stone-700 dark:text-stone-300"
+                            className="px-3 py-1.5 rounded-xl neo-btn text-xs font-black text-stone-900 dark:text-stone-100 bg-white dark:bg-[#1A1A28] cursor-pointer"
                           >
                             Chat
                           </button>
                         </div>
                       ) : user.isPendingRequest ? (
-                        <span className="text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-3 py-1.5 rounded-xl font-semibold border border-amber-200 dark:border-amber-800 flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5" />
+                        <span className="text-xs text-stone-900 dark:text-stone-200 bg-stone-100 dark:bg-stone-800 px-3 py-1.5 rounded-xl font-bold border-2 border-stone-900 flex items-center gap-1 shadow-[2px_2px_0px_#121217]">
+                          <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
                           <span>Requested</span>
                         </span>
                       ) : user.hasIncomingRequest ? (
-                        <span className="text-xs text-sky-800 bg-sky-50 dark:bg-sky-950/60 px-3 py-1.5 rounded-xl font-semibold border border-sky-200 dark:border-sky-800">
-                          Requested to follow you
+                        <span className="text-xs text-stone-950 bg-sky-200 dark:bg-sky-900 px-3 py-1.5 rounded-xl font-black border-2 border-stone-900 shadow-[2px_2px_0px_#121217]">
+                          Requested you
                         </span>
                       ) : (
                         <button
                           onClick={() => handleSendFollowRequest(user.id)}
                           disabled={isLoadingAction}
-                          className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-transform active:scale-98 cursor-pointer"
+                          className="px-3.5 py-1.5 neo-btn-primary disabled:opacity-50 text-stone-950 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer"
                         >
-                          <UserPlus className="w-3.5 h-3.5" />
-                          <span>{isLoadingAction ? 'Sending...' : 'Request Follow'}</span>
+                          <UserPlus className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>{isLoadingAction ? 'Sending...' : 'Request'}</span>
                         </button>
                       )}
                     </div>
@@ -294,12 +292,12 @@ export const SearchAndConnections: React.FC<SearchAndConnectionsProps> = ({
                 );
               })
             ) : searchQuery.trim() ? (
-              <div className="text-center py-12 glass-card rounded-3xl border border-slate-200 text-xs text-slate-400">
+              <div className="text-center py-12 neo-card bg-white dark:bg-[#161622] rounded-3xl text-xs font-bold text-stone-500">
                 No private accounts found matching "@{searchQuery}".
               </div>
             ) : (
-              <div className="p-8 text-center text-xs text-slate-400">
-                Type an exact username or prefix above to search your circle.
+              <div className="p-8 text-center text-xs font-bold text-stone-500">
+                Type an exact username above to find and connect with friends.
               </div>
             )}
           </div>
@@ -310,24 +308,24 @@ export const SearchAndConnections: React.FC<SearchAndConnectionsProps> = ({
       {activeTab === 'requests' && (
         <div className="space-y-6">
           <div>
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+            <h3 className="text-xs font-black text-stone-500 dark:text-stone-400 uppercase tracking-widest mb-3">
               Incoming Follow Requests ({pendingIncoming.length})
             </h3>
 
             {pendingIncoming.length === 0 ? (
-              <div className="p-8 glass-card rounded-3xl border border-slate-200 text-center">
-                <Users className="w-6 h-6 text-slate-300 mx-auto mb-2" />
-                <p className="text-xs text-slate-500">No new follow requests right now.</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  When someone requests to join your circle, you'll see them here to approve or reject.
+              <div className="p-8 neo-card bg-white dark:bg-[#161622] rounded-3xl text-center">
+                <Users className="w-8 h-8 text-stone-400 mx-auto mb-2 stroke-[2.5]" />
+                <p className="text-xs font-black text-stone-900 dark:text-stone-100">No new follow requests right now.</p>
+                <p className="text-[11px] font-medium text-stone-500 mt-1">
+                  When someone requests to join your private circle, you can approve or reject them here.
                 </p>
               </div>
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 {pendingIncoming.map((req) => (
                   <div
                     key={req.id}
-                    className="p-4 glass-card rounded-2xl flex items-center justify-between gap-3 shadow-xs"
+                    className="p-4 neo-card bg-white dark:bg-[#161622] rounded-2xl flex items-center justify-between gap-3 shadow-[3px_3px_0px_#121217]"
                   >
                     <div className="flex items-center gap-3">
                       {req.requester && (
@@ -338,14 +336,14 @@ export const SearchAndConnections: React.FC<SearchAndConnectionsProps> = ({
                         />
                       )}
                       <div>
-                        <p className="text-xs font-bold text-slate-900">
+                        <p className="text-xs font-black text-stone-900 dark:text-stone-100">
                           {req.requester?.displayName}
                         </p>
-                        <p className="text-[11px] text-slate-400">
+                        <p className="text-[11px] font-bold text-stone-500">
                           @{req.requester?.username} · 🔒 Private
                         </p>
                         {req.requester?.bio && (
-                          <p className="text-xs text-slate-600 italic mt-0.5 line-clamp-1">
+                          <p className="text-xs text-stone-700 dark:text-stone-300 italic mt-0.5 line-clamp-1">
                             "{req.requester.bio}"
                           </p>
                         )}
@@ -355,16 +353,16 @@ export const SearchAndConnections: React.FC<SearchAndConnectionsProps> = ({
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleAcceptRequest(req.id)}
-                        className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1 shadow-xs cursor-pointer"
+                        className="px-3.5 py-1.5 neo-btn-primary text-stone-950 rounded-xl text-xs font-black flex items-center gap-1 cursor-pointer"
                       >
-                        <Check className="w-3.5 h-3.5" />
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
                         <span>Accept</span>
                       </button>
                       <button
                         onClick={() => handleRejectRequest(req.id)}
-                        className="px-3 py-1.5 neu-button text-stone-700 dark:text-stone-300 rounded-xl text-xs font-medium"
+                        className="px-3.5 py-1.5 neo-btn text-stone-800 dark:text-stone-200 bg-white dark:bg-[#1A1A28] rounded-xl text-xs font-bold cursor-pointer"
                       >
-                        <span>Delete</span>
+                        <span>Reject</span>
                       </button>
                     </div>
                   </div>
@@ -376,25 +374,25 @@ export const SearchAndConnections: React.FC<SearchAndConnectionsProps> = ({
           {/* Outgoing Requests */}
           {pendingOutgoing.length > 0 && (
             <div>
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-                Sent Follow Requests Pending ({pendingOutgoing.length})
+              <h3 className="text-xs font-black text-stone-500 dark:text-stone-400 uppercase tracking-widest mb-3">
+                Sent Requests Pending ({pendingOutgoing.length})
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {pendingOutgoing.map((req) => (
                   <div
                     key={req.id}
-                    className="p-3.5 glass-card rounded-xl flex items-center justify-between"
+                    className="p-3.5 neo-card bg-white dark:bg-[#161622] rounded-xl flex items-center justify-between shadow-[2px_2px_0px_#121217]"
                   >
                     <div className="flex items-center gap-3">
                       {req.target && (
                         <UserAvatar name={req.target.displayName} src={req.target.avatarUrl} size="sm" />
                       )}
                       <div>
-                        <p className="text-xs font-bold text-slate-900">{req.target?.displayName}</p>
-                        <p className="text-[11px] text-slate-400">@{req.target?.username}</p>
+                        <p className="text-xs font-black text-stone-900 dark:text-stone-100">{req.target?.displayName}</p>
+                        <p className="text-[11px] font-bold text-stone-500">@{req.target?.username}</p>
                       </div>
                     </div>
-                    <span className="text-[11px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full font-semibold border border-amber-200">
+                    <span className="text-[11px] font-black text-stone-900 dark:text-amber-300 bg-amber-200 dark:bg-amber-950/80 px-2.5 py-1 rounded-full border border-stone-900">
                       Pending approval
                     </span>
                   </div>
@@ -409,33 +407,33 @@ export const SearchAndConnections: React.FC<SearchAndConnectionsProps> = ({
       {activeTab === 'following' && (
         <div className="space-y-3">
           {connectionsList.length === 0 ? (
-            <div className="p-8 glass-card rounded-3xl border border-slate-200 text-center text-xs text-slate-400">
+            <div className="p-8 neo-card bg-white dark:bg-[#161622] rounded-3xl text-center text-xs font-bold text-stone-500">
               No approved connections in your circle yet.
             </div>
           ) : (
             connectionsList.map((user) => (
-              <div key={user.id} className="p-4 glass-card rounded-2xl flex items-center justify-between">
+              <div key={user.id} className="p-4 neo-card bg-white dark:bg-[#161622] rounded-2xl flex items-center justify-between shadow-[3px_3px_0px_#121217]">
                 <div 
                   onClick={() => onOpenProfile(user.username)}
                   className="flex items-center gap-3 cursor-pointer flex-1"
                 >
-                  <UserAvatar name={user.displayName} src={user.avatarUrl} size="sm" />
+                  <UserAvatar name={user.displayName} src={user.avatarUrl} size="sm" isOnline={isUserOnline(user.id)} />
                   <div>
-                    <p className="text-xs font-bold text-slate-900">{user.displayName}</p>
-                    <p className="text-[11px] text-slate-400">@{user.username}</p>
+                    <p className="text-xs font-black text-stone-900 dark:text-stone-100">{user.displayName}</p>
+                    <p className="text-[11px] font-bold text-stone-500 dark:text-stone-400">@{user.username}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => onOpenChatWithUser(user.id)}
-                    className="px-3 py-1.5 neu-button text-slate-700 text-xs font-semibold rounded-xl"
+                    className="px-3.5 py-1.5 neo-btn text-stone-900 dark:text-stone-100 bg-white dark:bg-[#1A1A28] text-xs font-black rounded-xl cursor-pointer"
                   >
                     Chat
                   </button>
                   <button
                     onClick={() => handleUnfollow(user.id)}
-                    className="px-3 py-1.5 neu-button text-rose-600 text-xs font-semibold rounded-xl hover:bg-rose-50"
+                    className="px-3.5 py-1.5 neo-btn text-rose-600 dark:text-rose-400 bg-white dark:bg-[#1A1A28] text-xs font-black rounded-xl hover:bg-rose-100 dark:hover:bg-rose-950/50 cursor-pointer"
                   >
                     Unfollow
                   </button>

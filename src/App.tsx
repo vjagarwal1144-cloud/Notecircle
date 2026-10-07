@@ -18,7 +18,7 @@ import { AndroidFrame } from './components/AndroidFrame.tsx';
 import { ShieldCheck, LogIn } from 'lucide-react';
 
 function MainApp() {
-  const { currentUser, androidPreview, switchUser } = useAuth();
+  const { currentUser, androidPreview } = useAuth();
   const [activeTab, setActiveTab] = useState<string>('feed');
   const [viewingProfileUsername, setViewingProfileUsername] = useState<string | null>(null);
   const [activeChatUserId, setActiveChatUserId] = useState<string | undefined>(undefined);
@@ -30,6 +30,7 @@ function MainApp() {
   const [isBugReportOpen, setIsBugReportOpen] = useState(false);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isChatActiveOnMobile, setIsChatActiveOnMobile] = useState(false);
 
   const handleOpenProfile = (username: string) => {
     setViewingProfileUsername(username);
@@ -62,6 +63,7 @@ function MainApp() {
         return (
           <ChatView
             initialUserId={activeChatUserId}
+            onActiveConversationChange={setIsChatActiveOnMobile}
           />
         );
       case 'connections':
@@ -102,67 +104,47 @@ function MainApp() {
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#131211] text-stone-900 dark:text-stone-100 flex flex-col font-sans transition-colors">
-        <main className="flex-1 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#FFFDF9] dark:bg-[#0E0E14] text-stone-950 dark:text-stone-50 flex flex-col font-sans transition-colors relative overflow-hidden">
+        {/* Playful Neo-Brutalist background geometric shapes */}
+        <div className="absolute top-12 left-10 w-24 h-24 rounded-full border-3 border-stone-900 bg-amber-300 -rotate-12 pointer-events-none hidden sm:block opacity-60 shadow-[4px_4px_0px_#121217]" />
+        <div className="absolute bottom-16 right-12 w-28 h-28 rounded-3xl border-3 border-stone-900 bg-rose-400 rotate-12 pointer-events-none hidden sm:block opacity-60 shadow-[4px_4px_0px_#121217]" />
+        <div className="absolute top-1/3 right-8 w-16 h-16 border-3 border-stone-900 bg-emerald-400 rotate-45 pointer-events-none hidden sm:block opacity-60 shadow-[3px_3px_0px_#121217]" />
+
+        <main className="flex-1 flex items-center justify-center p-4 relative z-10">
           <div className="max-w-md w-full text-center space-y-6 animate-in fade-in">
-            <div className="w-16 h-16 bg-linear-to-br from-amber-500 to-amber-700 text-white rounded-3xl mx-auto flex items-center justify-center shadow-lg">
-              <ShieldCheck className="w-8 h-8" />
+            <div className="inline-flex items-center justify-center">
+              <div className="w-20 h-20 bg-amber-400 border-3 border-stone-900 rounded-3xl flex items-center justify-center shadow-[6px_6px_0px_#121217] -rotate-3 hover:rotate-0 transition-transform">
+                <span className="font-display font-black text-3xl tracking-tighter text-stone-950">NC</span>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl font-black text-stone-900 dark:text-stone-100 tracking-tight font-display">NoteCircle</h1>
-              <p className="text-xs text-stone-500 dark:text-stone-400 mt-2 max-w-sm mx-auto leading-relaxed">
-                Your private digital life with the people who actually matter. Real-time ephemeral notes & end-to-end encrypted messaging.
+
+            <div className="space-y-2">
+              <div className="inline-block">
+                <span className="neo-badge bg-stone-950 text-white text-[11px] font-black uppercase tracking-wider mb-2">
+                  Privacy-First Social
+                </span>
+              </div>
+              <h1 className="text-4xl sm:text-5xl font-black text-stone-950 dark:text-white tracking-tight font-display uppercase">
+                NoteCircle
+              </h1>
+              <p className="text-xs sm:text-sm font-bold text-stone-600 dark:text-stone-400 mt-2 max-w-sm mx-auto leading-relaxed">
+                Quiet status notes, live availability signals, and end-to-end encrypted messaging for your trusted circle. No ads. No feeds engineered for doomscrolling.
               </p>
             </div>
 
-            <div className="p-6 glass-card border border-amber-900/10 dark:border-white/10 rounded-3xl shadow-sm space-y-4">
-              <button
-                onClick={() => switchUser('rahul')}
-                className="w-full py-3 bg-amber-600 hover:bg-amber-700 active:scale-98 text-white rounded-2xl text-xs font-bold shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-              >
-                <LogIn className="w-4 h-4" />
-                <span>Explore as Rahul Sharma (Default Profile)</span>
-              </button>
-
-              <div className="relative flex py-1 items-center">
-                <div className="grow border-t border-stone-200 dark:border-stone-800"></div>
-                <span className="shrink mx-2 text-[10px] font-bold uppercase tracking-wider text-stone-400">or 1-click persona</span>
-                <div className="grow border-t border-stone-200 dark:border-stone-800"></div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  onClick={() => switchUser('priya')}
-                  className="p-2.5 rounded-xl border border-stone-200 dark:border-stone-800 hover:border-amber-500 bg-white dark:bg-stone-900 text-left transition-colors cursor-pointer"
-                >
-                  <div className="text-base">🏺</div>
-                  <div className="font-bold text-[11px] text-stone-800 dark:text-stone-200 truncate mt-0.5">Priya Patel</div>
-                  <div className="text-[10px] text-stone-400">Close Friend</div>
-                </button>
-                <button
-                  onClick={() => switchUser('amit')}
-                  className="p-2.5 rounded-xl border border-stone-200 dark:border-stone-800 hover:border-amber-500 bg-white dark:bg-stone-900 text-left transition-colors cursor-pointer"
-                >
-                  <div className="text-base">🎧</div>
-                  <div className="font-bold text-[11px] text-stone-800 dark:text-stone-200 truncate mt-0.5">Amit Verma</div>
-                  <div className="text-[10px] text-stone-400">Friend</div>
-                </button>
-                <button
-                  onClick={() => switchUser('admin')}
-                  className="p-2.5 rounded-xl border border-stone-200 dark:border-stone-800 hover:border-amber-500 bg-white dark:bg-stone-900 text-left transition-colors cursor-pointer"
-                >
-                  <div className="text-base">🛡️</div>
-                  <div className="font-bold text-[11px] text-stone-800 dark:text-stone-200 truncate mt-0.5">Safety Admin</div>
-                  <div className="text-[10px] text-stone-400">Moderator</div>
-                </button>
-              </div>
-
+            <div className="p-6 sm:p-7 neo-card bg-white dark:bg-[#161622] shadow-[8px_8px_0px_#121217] space-y-4">
               <button
                 onClick={() => setIsAuthModalOpen(true)}
-                className="w-full py-2.5 border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+                className="w-full py-3.5 px-6 neo-btn-primary rounded-2xl text-sm font-black flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
               >
-                Sign In with Credentials / Create Account
+                <LogIn className="w-4 h-4 stroke-[3]" />
+                <span>Enter Your Private Circle</span>
               </button>
+              <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-black text-stone-700 dark:text-stone-300 pt-2 border-t-2 border-stone-900 dark:border-stone-800">
+                <span className="px-2 py-0.5 bg-amber-200 dark:bg-amber-950/80 border border-stone-900 rounded-lg">🔒 Zero Telemetry</span>
+                <span className="px-2 py-0.5 bg-rose-200 dark:bg-rose-950/80 border border-stone-900 rounded-lg">⏳ Auto-Expiring Notes</span>
+                <span className="px-2 py-0.5 bg-emerald-200 dark:bg-emerald-950/80 border border-stone-900 rounded-lg">🛡️ E2E Encrypted</span>
+              </div>
             </div>
           </div>
         </main>
@@ -190,10 +172,11 @@ function MainApp() {
         onOpenAvailability={() => setIsAvailabilityOpen(true)}
         onOpenBugReport={() => setIsBugReportOpen(true)}
         onOpenSupport={() => setIsSupportOpen(true)}
+        hideBottomNav={activeTab === 'chat' && isChatActiveOnMobile}
       />
 
       {/* Core Body: Responsive Web or Android Device Shell */}
-      <main className="flex-1 pb-16 md:pb-6">
+      <main className={`flex-1 ${(activeTab === 'chat' && isChatActiveOnMobile) ? 'pb-0' : 'pb-24 md:pb-8'} w-full max-w-full overflow-x-hidden`}>
         {androidPreview ? (
           <AndroidFrame
             activeTitle={

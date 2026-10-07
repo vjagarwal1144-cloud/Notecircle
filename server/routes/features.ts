@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.ts';
 import { getAuthUser } from './auth.ts';
-import { isApprovedFollower } from '../privacy.ts';
+import { isApprovedFollower, canViewNote } from '../privacy.ts';
 
 export const featuresRouter = Router();
 
@@ -30,13 +30,20 @@ featuresRouter.get('/circle-status', (req, res) => {
       (n) => n.userId === id && n.status === 'ACTIVE' && (!n.expiresAt || new Date(n.expiresAt).getTime() > now)
     );
 
+    // CRITICAL FIX: Prevent note leakage!
+    // Check if viewer has explicit permission to see this specific note (audience, close_friends, selected)
+    const isAuthorizedForNote = activeNote ? canViewNote(viewer.id, activeNote) : false;
+
+    // Respect user privacy settings for status visibility
+    const canSeeStatus = user.privacySettings?.whoCanSeeOnlineStatus !== 'nobody';
+
     return {
       id: user.id,
       username: user.username,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
-      availability: user.availability,
-      activeNote: activeNote ? {
+      availability: canSeeStatus ? user.availability : undefined,
+      activeNote: isAuthorizedForNote && activeNote ? {
         emoji: activeNote.emoji,
         text: activeNote.text,
         category: activeNote.category,
@@ -93,7 +100,11 @@ featuresRouter.post('/plans/:id/rsvp', (req, res) => {
     return res.status(400).json({ error: 'Status must be attending, maybe, or declined' });
   }
 
-  db.updatePlanRsvp(req.params.id, viewer.id, viewer.displayName, status as any);
+  const success = db.updatePlanRsvp(req.params.id, viewer.id, viewer.displayName, status as any);
+  if (!success) {
+    return res.status(403).json({ error: 'You are not authorized to RSVP to this plan' });
+  }
+
   return res.json({ success: true, message: `RSVP updated to ${status}` });
 });
 
@@ -114,6 +125,10 @@ featuresRouter.post('/capsules', (req, res) => {
   const { title, coverEmoji = '✨', unlockAt, items } = req.body;
   if (!title) {
     return res.status(400).json({ error: 'Title is required' });
+  }
+
+  if (unlockAt && isNaN(Date.parse(unlockAt))) {
+    return res.status(400).json({ error: 'Invalid unlockAt date format' });
   }
 
   const capsule = {

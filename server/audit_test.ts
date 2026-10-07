@@ -48,7 +48,7 @@ async function runAudit() {
   });
   assert.strictEqual(reg1.status, 201, `Failed to register User 1: ${JSON.stringify(reg1.data)}`);
   assert(reg1.data.token, 'Token not received for User 1');
-  const token1 = reg1.data.token;
+  let token1 = reg1.data.token;
   const user1 = reg1.data.user;
   console.log('    ✓ User 1 registered successfully:', user1.id);
 
@@ -255,7 +255,109 @@ async function runAudit() {
   });
   assert.strictEqual(reloginRes.status, 200);
   assert(reloginRes.data.token);
+  token1 = reloginRes.data.token;
   console.log('    ✓ User 1 re-logged in successfully');
+
+  console.log('[13] Testing Unencrypted Chat Rejection');
+  const rejectUnencryptedRes = await request(`/api/chat/conversations/${conv.id}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ text: 'Insecure plaintext without encrypted envelope' })
+  }, token1);
+  assert.strictEqual(rejectUnencryptedRes.status, 400, 'Server accepted unencrypted message!');
+  console.log('    ✓ ZERO LEAKAGE: Unencrypted plaintext messages strictly rejected with 400');
+
+  console.log('[14] Testing Circle Status Note Privacy & Zero Leakage');
+  // User 1 creates a close_friends only note
+  const cfNoteRes = await request('/api/notes', {
+    method: 'POST',
+    body: JSON.stringify({
+      emoji: '🤫',
+      category: 'custom',
+      categoryLabel: 'Secret Note',
+      text: 'Only for close friends!',
+      audience: 'close_friends',
+      durationHours: 24
+    })
+  }, token1);
+  assert.strictEqual(cfNoteRes.status, 201);
+  // User 2 is follower, but NOT close friend. User 2 checks circle-status: note must NOT leak!
+  const circleStatusRes = await request('/api/features/circle-status', {}, token2);
+  assert.strictEqual(circleStatusRes.status, 200);
+  const user1InCircle = circleStatusRes.data.circleMembers.find((m: any) => m.id === user1.id);
+  assert(!user1InCircle?.activeNote, 'CRITICAL LEAK: Close-friends note leaked in circle status to regular follower!');
+  console.log('    ✓ ZERO LEAKAGE: Circle status strictly hides note from non-close-friends');
+
+  console.log('[15] Testing Plans Authorization & Zero Leakage');
+  // User 1 creates a plan
+  const planRes = await request('/api/features/plans', {
+    method: 'POST',
+    body: JSON.stringify({
+      title: 'Auditors Gathering',
+      emoji: '☕',
+      scheduledTime: 'Tomorrow 5 PM'
+    })
+  }, token1);
+  assert.strictEqual(planRes.status, 201);
+  const createdPlan = planRes.data.plan;
+
+  // Connected User 2 can see plan
+  const plans2Res = await request('/api/features/plans', {}, token2);
+  assert.strictEqual(plans2Res.status, 200);
+  assert(plans2Res.data.plans.some((p: any) => p.id === createdPlan.id), 'Connected user cannot see circle plan');
+
+  // Unauthorized Stranger User 3 checks plans: must NOT see plan!
+  const plans3Res = await request('/api/features/plans', {}, token3);
+  assert.strictEqual(plans3Res.status, 200);
+  assert(!plans3Res.data.plans.some((p: any) => p.id === createdPlan.id), 'CRITICAL LEAK: Unauthorized User 3 can see private plan!');
+
+  // User 3 attempts to RSVP to User 1 plan: must be rejected with 403!
+  const rsvp3Res = await request(`/api/features/plans/${createdPlan.id}/rsvp`, {
+    method: 'POST',
+    body: JSON.stringify({ status: 'attending' })
+  }, token3);
+  assert.strictEqual(rsvp3Res.status, 403, 'Unauthorized User 3 was allowed to RSVP to private plan!');
+  console.log('    ✓ ZERO LEAKAGE: Unauthorized strangers blocked from viewing or RSVPing to plans');
+
+  console.log('[16] Testing Memory Capsules Zero Data Leakage (Locked State)');
+  // User 1 creates capsule with future unlock timestamp
+  const futureUnlock = new Date(Date.now() + 86400000).toISOString();
+  const capRes = await request('/api/features/capsules', {
+    method: 'POST',
+    body: JSON.stringify({
+      title: 'Time Locked Vault',
+      coverEmoji: '🔒',
+      unlockAt: futureUnlock,
+      items: [{ type: 'note', text: 'Top secret future message' }]
+    })
+  }, token1);
+  assert.strictEqual(capRes.status, 201);
+
+  // Connected User 2 checks capsules: items MUST BE EMPTY (zero leakage prior to unlock)
+  const cap2Res = await request('/api/features/capsules', {}, token2);
+  assert.strictEqual(cap2Res.status, 200);
+  const lockedCap = cap2Res.data.capsules.find((c: any) => c.title === 'Time Locked Vault');
+  if (lockedCap) {
+    assert.strictEqual(lockedCap.isLocked, true);
+    assert.deepStrictEqual(lockedCap.items, [], 'CRITICAL LEAK: Memory capsule leaked items prior to unlock!');
+  }
+  console.log('    ✓ ZERO LEAKAGE: Memory capsule strictly strips items prior to unlock timestamp');
+
+  console.log('[17] Testing Safety Number Verification State');
+  const snRes = await request(`/api/crypto/safety-numbers/${user2.id}`, {}, token1);
+  assert.strictEqual(snRes.status, 200);
+  assert.strictEqual(snRes.data.verified, false, 'Safety number was falsely verified: true by default!');
+
+  // Verify out-of-band toggle
+  const verifySnRes = await request(`/api/crypto/safety-numbers/${user2.id}/verify`, {
+    method: 'POST',
+    body: JSON.stringify({ verified: true })
+  }, token1);
+  assert.strictEqual(verifySnRes.status, 200);
+
+  const recheckSnRes = await request(`/api/crypto/safety-numbers/${user2.id}`, {}, token1);
+  assert.strictEqual(recheckSnRes.status, 200);
+  assert.strictEqual(recheckSnRes.data.verified, true);
+  console.log('    ✓ Safety number verification state correctly reflects user confirmation (no false true)');
 
   console.log('====================================================');
   console.log('🎉 ALL PRODUCTION AUDIT AND AUTHORIZATION TESTS PASSED');

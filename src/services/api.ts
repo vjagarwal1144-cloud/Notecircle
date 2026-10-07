@@ -12,33 +12,35 @@ import type {
   NotificationSettings
 } from '../types/index.ts';
 
-const TOKEN_KEY = 'notecircle_auth_token';
+let inMemoryToken: string | null = null;
+
+// Purge any legacy localStorage tokens for security
+try {
+  localStorage.removeItem('notecircle_auth_token');
+  localStorage.removeItem('notecircle_token');
+} catch {}
 
 export function getStoredToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return inMemoryToken;
 }
 
 export function setStoredToken(token: string | null) {
-  if (token) {
-    localStorage.setItem(TOKEN_KEY, token);
-  } else {
-    localStorage.removeItem(TOKEN_KEY);
-  }
+  inMemoryToken = token;
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = getStoredToken();
   const headers = new Headers(options.headers || {});
   
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
   
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
+  if (inMemoryToken) {
+    headers.set('Authorization', `Bearer ${inMemoryToken}`);
   }
 
   const response = await fetch(endpoint, {
+    credentials: 'same-origin',
     ...options,
     headers
   });
@@ -86,10 +88,22 @@ export const api = {
       body: JSON.stringify({ identifier })
     });
   },
+  async requestPasswordRecovery(identifier: string) {
+    return request<{ success: boolean; message: string; userId: string }>('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ identifier })
+    });
+  },
   async resetPassword(data: { userId: string; code: string; newPassword: string }) {
     return request<{ success: boolean; message: string; token: string; user: User }>('/api/auth/reset-password', {
       method: 'POST',
       body: JSON.stringify(data)
+    });
+  },
+  async resetPasswordWithRecoveryCode(userId: string, code: string, newPassword: string) {
+    return request<{ success: boolean; message: string; token: string; user: User }>('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ userId, code, newPassword })
     });
   },
 
@@ -383,6 +397,12 @@ export const api = {
   },
   async getSafetyNumber(otherUserId: string) {
     return request<{ userIds: string[]; safetyNumber: string; verified: boolean }>(`/api/crypto/safety-numbers/${otherUserId}`);
+  },
+  async verifySafetyNumber(otherUserId: string, verified: boolean) {
+    return request<{ success: boolean; userId: string; verified: boolean }>(`/api/crypto/safety-numbers/${otherUserId}/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ verified })
+    });
   },
 
   // Production Database Backup & Verification

@@ -191,8 +191,22 @@ chatRouter.post('/conversations/:id/messages', (req, res) => {
   const { text, encryptedPayload, replyToId, mediaUrl, clientMessageId } = req.body;
   const idempotencyKey = (req.headers['idempotency-key'] as string) || clientMessageId;
 
-  if (!text && !encryptedPayload && !mediaUrl) {
-    return res.status(400).json({ error: 'Message cannot be empty' });
+  // Requirement 5: Enforce encrypted chat payloads.
+  // Reject unencrypted messages. A valid encrypted wire envelope is strictly mandatory.
+  if (!encryptedPayload || typeof encryptedPayload !== 'string' || !encryptedPayload.trim()) {
+    return res.status(400).json({
+      error: 'End-to-end encrypted payload is strictly required. Plaintext messages are rejected for zero-knowledge privacy.'
+    });
+  }
+
+  // Validate that encryptedPayload is a structured envelope with ciphertext and IV
+  try {
+    const parsedEnvelope = JSON.parse(encryptedPayload);
+    if (!parsedEnvelope.ct || !parsedEnvelope.iv) {
+      return res.status(400).json({ error: 'Malformed encrypted payload: missing ciphertext or IV' });
+    }
+  } catch {
+    return res.status(400).json({ error: 'Malformed encrypted payload: must be valid JSON envelope' });
   }
 
   const conv = db.get('conversations').find((c) => c.id === convId);
@@ -248,8 +262,8 @@ chatRouter.post('/conversations/:id/messages', (req, res) => {
     senderName: viewer.displayName,
     senderAvatar: viewer.avatarUrl,
     // Strict privacy-first: Backend never stores readable plaintext for end-to-end encrypted chats
-    text: encryptedPayload ? '[End-to-End Encrypted Message]' : (text || '[Encrypted Message]'),
-    encryptedPayload: encryptedPayload || undefined,
+    text: '[End-to-End Encrypted Message]',
+    encryptedPayload: encryptedPayload.trim(),
     replyToId,
     replyPreview,
     mediaUrl,

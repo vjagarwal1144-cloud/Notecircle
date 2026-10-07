@@ -247,10 +247,10 @@ export const NotesHistory: React.FC<NotesHistoryProps> = ({ onOpenCreateNote }) 
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-5">
       
       {/* Top Header & Tab Navigation */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200/80 dark:border-stone-800 pb-4">
         <div>
-          <h2 className="text-base font-bold text-slate-900 font-display">My Notes Management</h2>
-          <p className="text-xs text-slate-500">Local-first note storage, drafts, scheduling, and custom templates</p>
+          <h2 className="text-base font-bold text-stone-900 dark:text-stone-100 font-display">My Notes Management</h2>
+          <p className="text-xs text-stone-500 dark:text-stone-400">Local-first note storage, drafts, scheduling, and custom templates</p>
         </div>
 
         <button
@@ -258,64 +258,76 @@ export const NotesHistory: React.FC<NotesHistoryProps> = ({ onOpenCreateNote }) 
           className="px-4 py-2 bg-amber-600 text-white text-xs font-semibold rounded-xl hover:bg-amber-700 flex items-center gap-1.5 shadow-xs transition-transform active:scale-98 self-start sm:self-auto cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span>＋ New Note</span>
+          <span>New Note</span>
         </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1.5 text-xs p-1.5 bg-stone-100 dark:bg-[#12121A] border-2 border-stone-900 dark:border-stone-750 rounded-2xl shadow-[2px_2px_0px_#121217]">
         <button
           onClick={() => setActiveTab('active')}
-          className={`px-3.5 py-1.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
-            activeTab === 'active' ? 'bg-amber-600 text-white shadow-xs' : 'neu-button text-stone-600 dark:text-stone-300 hover:text-stone-900'
+          className={`px-3.5 py-2 rounded-xl font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
+            activeTab === 'active' 
+              ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' 
+              : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white'
           }`}
         >
-          Active Notes ({activeNotes.length})
+          Active ({activeNotes.length})
         </button>
         <button
           onClick={() => setActiveTab('scheduled')}
-          className={`px-3.5 py-1.5 rounded-xl font-semibold transition-all whitespace-nowrap flex items-center gap-1 ${
-            activeTab === 'scheduled' ? 'bg-amber-600 text-white shadow-xs' : 'neu-button text-stone-600 dark:text-stone-300 hover:text-stone-900'
+          className={`px-3.5 py-2 rounded-xl font-black uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'scheduled' 
+              ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' 
+              : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white'
           }`}
         >
-          <Calendar className="w-3 h-3" />
+          <Calendar className="w-3.5 h-3.5 stroke-[2.5]" />
           <span>Scheduled ({scheduledNotes.length})</span>
         </button>
         <button
           onClick={() => setActiveTab('drafts')}
-          className={`px-3.5 py-1.5 rounded-xl font-semibold transition-all whitespace-nowrap flex items-center gap-1 ${
-            activeTab === 'drafts' ? 'bg-amber-600 text-white shadow-xs' : 'neu-button text-stone-600 dark:text-stone-300 hover:text-stone-900'
+          className={`px-3.5 py-2 rounded-xl font-black uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'drafts' 
+              ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' 
+              : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white'
           }`}
         >
-          <FileEdit className="w-3 h-3" />
+          <FileEdit className="w-3.5 h-3.5 stroke-[2.5]" />
           <span>Drafts ({draftNotes.length})</span>
         </button>
         <button
           onClick={() => setActiveTab('history')}
-          className={`px-3.5 py-1.5 rounded-xl font-semibold transition-all whitespace-nowrap flex items-center gap-1 ${
-            activeTab === 'history' ? 'bg-amber-600 text-white shadow-xs' : 'neu-button text-stone-600 dark:text-stone-300 hover:text-stone-900'
+          className={`px-3.5 py-2 rounded-xl font-black uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'history' 
+              ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' 
+              : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white'
           }`}
         >
-          <Clock className="w-3 h-3" />
-          <span>Expired History ({pastNotes.length})</span>
+          <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
+          <span>Expired ({pastNotes.length})</span>
         </button>
         <button
           onClick={() => setActiveTab('templates')}
-          className={`px-3.5 py-1.5 rounded-xl font-semibold transition-all whitespace-nowrap flex items-center gap-1 ${
-            activeTab === 'templates' ? 'bg-amber-600 text-white shadow-xs' : 'neu-button text-stone-600 dark:text-stone-300 hover:text-stone-900'
+          className={`px-3.5 py-2 rounded-xl font-black uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'templates' 
+              ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' 
+              : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white'
           }`}
         >
-          <Bookmark className="w-3 h-3" />
+          <Bookmark className="w-3.5 h-3.5 stroke-[2.5]" />
           <span>Templates ({templates.length})</span>
         </button>
         <button
           onClick={() => setActiveTab('close_friends')}
-          className={`px-3.5 py-1.5 rounded-xl font-semibold transition-all whitespace-nowrap flex items-center gap-1 ${
-            activeTab === 'close_friends' ? 'bg-amber-600 text-white shadow-xs' : 'neu-button text-stone-600 dark:text-stone-300 hover:text-stone-900'
+          className={`px-3.5 py-2 rounded-xl font-black uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'close_friends' 
+              ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' 
+              : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white'
           }`}
         >
-          <Users className="w-3 h-3" />
-          <span>Close Friends ({closeFriends.length})</span>
+          <Users className="w-3.5 h-3.5 stroke-[2.5]" />
+          <span>Inner Circle ({closeFriends.length})</span>
         </button>
       </div>
 
@@ -323,11 +335,11 @@ export const NotesHistory: React.FC<NotesHistoryProps> = ({ onOpenCreateNote }) 
       {activeTab === 'active' && (
         <div className="space-y-4">
           {activeNotes.length === 0 ? (
-            <div className="text-center py-14 glass-card rounded-3xl border border-stone-200 dark:border-stone-800">
-              <p className="text-xs text-stone-500">You don't have any active notes right now.</p>
+            <div className="text-center py-14 neo-card bg-white dark:bg-[#161622] rounded-3xl">
+              <p className="text-xs font-bold text-stone-500">You don't have any active notes right now.</p>
               <button
                 onClick={onOpenCreateNote}
-                className="mt-3 px-4 py-2 bg-amber-600 text-white text-xs font-semibold rounded-xl hover:bg-amber-700 shadow-xs cursor-pointer"
+                className="mt-3 px-4 py-2 neo-btn-primary text-stone-950 text-xs font-black rounded-xl cursor-pointer"
               >
                 Create an active note
               </button>
@@ -336,24 +348,24 @@ export const NotesHistory: React.FC<NotesHistoryProps> = ({ onOpenCreateNote }) 
             activeNotes.map((note) => (
               <div
                 key={note.id}
-                className="glass-card rounded-3xl p-5 border-2 border-amber-500/30 shadow-xs space-y-3"
+                className="neo-card bg-white dark:bg-[#161622] rounded-3xl p-5 border-2.5 border-stone-900 shadow-[5px_5px_0px_#121217] space-y-3"
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-3">
                     <span className="text-2xl select-none">{note.emoji}</span>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-stone-900 dark:text-stone-100">{note.categoryLabel}</span>
+                        <span className="text-xs font-black text-stone-900 dark:text-stone-100">{note.categoryLabel}</span>
                         {note.isPinned && (
-                          <span className="text-[10px] text-amber-800 bg-amber-100 dark:bg-amber-900/40 px-2 py-0.2 rounded-full font-bold">
-                            Pinned
+                          <span className="text-[10px] text-stone-950 bg-amber-300 border border-stone-900 px-2 py-0.5 rounded-full font-black">
+                            📌 Pinned
                           </span>
                         )}
-                        <span className="text-[10px] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.2 rounded-full font-semibold border border-amber-200 dark:border-amber-800">
-                          {note.audience === 'close_friends' ? 'Close Friends Only' : 'Followers'}
+                        <span className="text-[10px] text-stone-900 dark:text-stone-200 bg-stone-100 dark:bg-stone-800 border border-stone-900 px-2 py-0.5 rounded-full font-bold">
+                          {note.audience === 'close_friends' ? '🔒 Inner Circle' : '👥 Circle'}
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-400 mt-0.5">
+                      <p className="text-[10px] font-bold text-stone-400 mt-0.5">
                         Posted {new Date(note.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · Expires {note.expiresAt ? new Date(note.expiresAt).toLocaleDateString() : 'Never'}
                       </p>
                     </div>
@@ -362,10 +374,10 @@ export const NotesHistory: React.FC<NotesHistoryProps> = ({ onOpenCreateNote }) 
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => handleTogglePin(note)}
-                      className={`p-1.5 rounded-xl neu-button text-xs ${note.isPinned ? 'text-amber-600' : 'text-slate-400'}`}
+                      className={`p-2 rounded-xl neo-btn text-xs bg-white dark:bg-[#1A1A28] ${note.isPinned ? 'text-amber-500 font-bold' : 'text-stone-400'}`}
                       title={note.isPinned ? 'Unpin note' : 'Pin note to top'}
                     >
-                      <Pin className="w-3.5 h-3.5" />
+                      <Pin className="w-3.5 h-3.5 stroke-[2.5]" />
                     </button>
                     <button
                       onClick={() => {
@@ -376,29 +388,29 @@ export const NotesHistory: React.FC<NotesHistoryProps> = ({ onOpenCreateNote }) 
                         setEditAllowReplies(note.allowReplies !== false);
                         setEditAllowReactions(note.allowReactions !== false);
                       }}
-                      className="p-1.5 rounded-xl neu-button text-slate-600 text-xs"
+                      className="p-2 rounded-xl neo-btn text-stone-700 dark:text-stone-200 bg-white dark:bg-[#1A1A28] text-xs cursor-pointer"
                       title="Edit note"
                     >
-                      <FileEdit className="w-3.5 h-3.5" />
+                      <FileEdit className="w-3.5 h-3.5 stroke-[2.5]" />
                     </button>
                     <button
                       onClick={() => handleSaveAsTemplate(note)}
-                      className="p-1.5 rounded-xl neu-button text-slate-600 text-xs"
+                      className="p-2 rounded-xl neo-btn text-stone-700 dark:text-stone-200 bg-white dark:bg-[#1A1A28] text-xs cursor-pointer"
                       title="Save as reusable template"
                     >
-                      <Bookmark className="w-3.5 h-3.5" />
+                      <Bookmark className="w-3.5 h-3.5 stroke-[2.5]" />
                     </button>
                     <button
                       onClick={() => handleDelete(note.id)}
-                      className="p-1.5 rounded-xl neu-button text-rose-500 hover:text-rose-700 text-xs"
+                      className="p-2 rounded-xl neo-btn text-rose-500 hover:text-rose-700 bg-white dark:bg-[#1A1A28] text-xs cursor-pointer"
                       title="Delete note"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3.5 h-3.5 stroke-[2.5]" />
                     </button>
                   </div>
                 </div>
 
-                <p className="text-sm text-slate-800 font-normal leading-relaxed whitespace-pre-wrap">
+                <p className="text-sm font-medium text-stone-900 dark:text-stone-100 leading-relaxed whitespace-pre-wrap">
                   {note.text}
                 </p>
 
@@ -750,78 +762,78 @@ export const NotesHistory: React.FC<NotesHistoryProps> = ({ onOpenCreateNote }) 
 
       {/* Edit Note Modal */}
       {editingNote && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="glass-panel w-full max-w-md rounded-3xl p-5 space-y-4">
-            <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/70 backdrop-blur-xs">
+          <div className="neo-card bg-white dark:bg-[#161622] w-full max-w-md rounded-3xl p-6 space-y-4 shadow-[6px_6px_0px_#121217]">
+            <h3 className="text-sm font-black text-stone-900 dark:text-stone-100 uppercase tracking-wide border-b-2 border-stone-900 dark:border-stone-800 pb-2">
               Edit Note
             </h3>
 
             <div>
-              <label className="text-xs font-semibold text-slate-700 block mb-1">Note Text</label>
+              <label className="text-xs font-black uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1">Note Text</label>
               <textarea
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
                 rows={3}
-                className="w-full text-xs p-3 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl focus:border-amber-500 focus:outline-hidden"
+                className="w-full text-xs font-bold p-3 neo-input text-stone-900 dark:text-stone-100 placeholder:text-stone-400"
               />
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 block mb-1">Audience</label>
+              <label className="text-xs font-black uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1">Audience</label>
               <select
                 value={editAudience}
                 onChange={(e) => setEditAudience(e.target.value as any)}
-                className="w-full text-xs p-2.5 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl text-stone-800 dark:text-stone-200"
+                className="w-full text-xs font-bold p-3 neo-input text-stone-900 dark:text-stone-100"
               >
-                <option value="followers">Approved Followers</option>
-                <option value="close_friends">Close Friends Only</option>
+                <option value="followers">Approved Circle</option>
+                <option value="close_friends">Inner Circle Only</option>
               </select>
             </div>
 
-            <div className="space-y-2 pt-1 border-t border-stone-100 dark:border-stone-800">
-              <label className="flex items-center gap-2 text-xs font-medium text-stone-700 dark:text-stone-300 cursor-pointer">
+            <div className="space-y-2 pt-2 border-t-2 border-stone-900 dark:border-stone-800">
+              <label className="flex items-center gap-2 text-xs font-bold text-stone-800 dark:text-stone-200 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={editPinned}
                   onChange={(e) => setEditPinned(e.target.checked)}
-                  className="rounded text-amber-600 focus:ring-amber-500"
+                  className="rounded text-amber-500 focus:ring-amber-500"
                 />
-                <span>Pin this note to the top of my profile</span>
+                <span>Pin this note to the top</span>
               </label>
 
-              <label className="flex items-center gap-2 text-xs font-medium text-stone-700 dark:text-stone-300 cursor-pointer">
+              <label className="flex items-center gap-2 text-xs font-bold text-stone-800 dark:text-stone-200 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={editAllowReactions}
                   onChange={(e) => setEditAllowReactions(e.target.checked)}
-                  className="rounded text-amber-600 focus:ring-amber-500"
+                  className="rounded text-amber-500 focus:ring-amber-500"
                 />
-                <span>Allow reactions (❤️, 👍, etc.) to this note</span>
+                <span>Allow reactions (❤️, 👍, etc.)</span>
               </label>
 
-              <label className="flex items-center gap-2 text-xs font-medium text-stone-700 dark:text-stone-300 cursor-pointer">
+              <label className="flex items-center gap-2 text-xs font-bold text-stone-800 dark:text-stone-200 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={editAllowReplies}
                   onChange={(e) => setEditAllowReplies(e.target.checked)}
-                  className="rounded text-amber-600 focus:ring-amber-500"
+                  className="rounded text-amber-500 focus:ring-amber-500"
                 />
-                <span>Allow private replies to this note</span>
+                <span>Allow private replies</span>
               </label>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t-2 border-stone-900 dark:border-stone-800">
               <button
                 onClick={() => setEditingNote(null)}
-                className="px-3 py-1.5 text-xs text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+                className="px-3.5 py-2 text-xs font-bold text-stone-600 dark:text-stone-400 hover:underline cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveEdit}
-                className="px-4 py-2 bg-amber-600 text-white rounded-xl text-xs font-semibold hover:bg-amber-700 shadow-xs cursor-pointer"
+                className="px-4 py-2 neo-btn-primary text-stone-950 rounded-xl text-xs font-black cursor-pointer"
               >
-                Save Note
+                Save Changes
               </button>
             </div>
           </div>

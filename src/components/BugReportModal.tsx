@@ -87,38 +87,40 @@ export const BugReportModal: React.FC<BugReportModalProps> = ({ isOpen, onClose 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-xs">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/70 backdrop-blur-xs">
       <div 
-        className="bg-white dark:bg-[#1C1A18] border border-stone-200/80 dark:border-stone-800 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150"
+        className="neo-card bg-white dark:bg-[#161622] w-full max-w-lg rounded-3xl shadow-[6px_6px_0px_#121217] overflow-hidden flex flex-col max-h-[90vh]"
         role="dialog"
       >
-        <div className="px-6 py-4 border-b border-stone-100 dark:border-stone-800/80 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Bug className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-            <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 font-display">Report Bug / Send Feedback</h3>
+        <div className="px-6 py-4 border-b-2 border-stone-900 dark:border-stone-800 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-400 border-2 border-stone-900 flex items-center justify-center text-stone-950 font-bold shadow-[2px_2px_0px_#121217]">
+              <Bug className="w-4 h-4 stroke-[2.5]" />
+            </div>
+            <h3 className="text-sm font-black text-stone-900 dark:text-stone-100 uppercase tracking-wide">Report Bug / Feedback</h3>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-xl text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+            className="p-1 rounded-xl neo-btn text-stone-900 dark:text-stone-100 bg-white dark:bg-[#1A1A26] cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5 stroke-[2.5]" />
           </button>
         </div>
 
         {/* Tab Header */}
-        <div className="flex items-center px-6 pt-3 border-b border-stone-105 dark:border-stone-800 gap-4">
+        <div className="flex items-center px-4 sm:px-6 py-2.5 border-b-2 border-stone-900 dark:border-stone-800 gap-2 bg-stone-50 dark:bg-[#14141F]">
           <button
             onClick={() => setTab('new')}
-            className={`pb-2.5 text-xs font-semibold border-b-2 transition-colors ${
-              tab === 'new' ? 'border-amber-600 text-amber-700 dark:text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200'
+            className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+              tab === 'new' ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' : 'text-stone-600 dark:text-stone-400 hover:text-stone-950 dark:hover:text-white'
             }`}
           >
             New Bug Report
           </button>
           <button
             onClick={() => setTab('history')}
-            className={`pb-2.5 text-xs font-semibold border-b-2 transition-colors ${
-              tab === 'history' ? 'border-amber-600 text-amber-700 dark:text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200'
+            className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+              tab === 'history' ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' : 'text-stone-600 dark:text-stone-400 hover:text-stone-950 dark:hover:text-white'
             }`}
           >
             My Reports ({myBugs.length})
@@ -205,20 +207,20 @@ export const BugReportModal: React.FC<BugReportModalProps> = ({ isOpen, onClose 
                 Browser: {navigator.userAgent.substring(0, 30)}... | Viewport: {window.innerWidth}x{window.innerHeight} | Mode: {androidPreview ? 'Android Shell' : 'Web Desktop'}
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t-2 border-stone-900 dark:border-stone-800">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-3.5 py-2 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200"
+                  className="px-3.5 py-2 text-xs font-bold text-stone-600 dark:text-stone-400 hover:underline cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting || !description.trim()}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-transform active:scale-98"
+                  className="px-5 py-2.5 neo-btn-primary disabled:opacity-50 text-stone-950 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Send className="w-3.5 h-3.5" />
+                  <Send className="w-3.5 h-3.5 stroke-[2.5]" />
                   <span>{isSubmitting ? 'Sending...' : 'Submit Report'}</span>
                 </button>
               </div>
@@ -226,44 +228,44 @@ export const BugReportModal: React.FC<BugReportModalProps> = ({ isOpen, onClose 
           ) : (
             <div className="space-y-3">
               {myBugs.length === 0 ? (
-                <p className="text-xs text-stone-400 text-center py-8">
+                <p className="text-xs font-bold text-stone-400 text-center py-8">
                   You haven't submitted any bug reports yet.
                 </p>
               ) : (
                 myBugs.map((b) => (
-                  <div key={b.id} className="p-4 bg-white dark:bg-stone-850 rounded-2xl border border-stone-200/80 dark:border-stone-750 space-y-1.5 shadow-xs">
+                  <div key={b.id} className="p-4 bg-white dark:bg-[#1A1A28] rounded-2xl border-2 border-stone-900 space-y-2 shadow-[3px_3px_0px_#121217]">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-stone-800 dark:text-stone-200 uppercase tracking-wide">
+                      <span className="text-xs font-black text-stone-900 dark:text-stone-100 uppercase tracking-wide">
                         {b.category}
                       </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-stone-900 ${
                         b.status === 'RESOLVED'
-                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                          ? 'bg-emerald-300 text-stone-950'
                           : b.status === 'IN_PROGRESS'
-                          ? 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300'
+                          ? 'bg-sky-300 text-stone-950'
                           : b.status === 'REVIEWING'
-                          ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
-                          : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                          ? 'bg-purple-300 text-stone-950'
+                          : 'bg-amber-300 text-stone-950'
                       }`}>
                         {b.status}
                       </span>
                     </div>
-                    <p className="text-xs text-stone-700 dark:text-stone-300">{b.description}</p>
+                    <p className="text-xs font-medium text-stone-900 dark:text-stone-100">{b.description}</p>
                     {b.screenshot && (
                       <div className="pt-1">
                         <img
                           src={b.screenshot}
                           alt="Report screenshot"
-                          className="h-20 w-auto rounded-xl border border-stone-200 dark:border-stone-700 object-cover"
+                          className="h-20 w-auto rounded-xl border-2 border-stone-900 object-cover"
                         />
                       </div>
                     )}
                     {b.resolutionNote && (
-                      <p className="text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
+                      <p className="text-[11px] font-bold text-stone-950 dark:text-amber-200 bg-amber-200 dark:bg-amber-950/60 p-2.5 rounded-xl border border-stone-900">
                         <strong>Resolution Note:</strong> {b.resolutionNote}
                       </p>
                     )}
-                    <span className="text-[10px] text-stone-400 block">
+                    <span className="text-[10px] font-bold text-stone-400 block pt-1 border-t border-stone-200 dark:border-stone-800">
                       Submitted on {new Date(b.createdAt).toLocaleDateString()}
                     </span>
                   </div>

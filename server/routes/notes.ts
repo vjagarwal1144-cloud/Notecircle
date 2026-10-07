@@ -16,7 +16,8 @@ const CATEGORY_LABELS: Record<NoteCategory, string> = {
   sleep: 'Sleeping',
   dnd: 'Do Not Disturb',
   break: 'Taking a Break',
-  custom: 'Personal Note'
+  custom: 'Personal Note',
+  other: 'Other'
 };
 
 // GET /api/notes/feed (Circle Feed - only authorized notes)

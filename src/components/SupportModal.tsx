@@ -48,65 +48,67 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-xs">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/70 backdrop-blur-xs">
       <div 
-        className="bg-white dark:bg-[#1C1A18] border border-stone-200/80 dark:border-stone-800 w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150"
+        className="neo-card bg-white dark:bg-[#161622] w-full max-w-xl rounded-3xl shadow-[6px_6px_0px_#121217] overflow-hidden flex flex-col max-h-[90vh]"
         role="dialog"
       >
-        <div className="px-6 py-4 border-b border-stone-100 dark:border-stone-800/80 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <HelpCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-            <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 font-display">Help, Safety & Policies</h3>
+        <div className="px-6 py-4 border-b-2 border-stone-900 dark:border-stone-800 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-400 border-2 border-stone-900 flex items-center justify-center text-stone-950 font-bold shadow-[2px_2px_0px_#121217]">
+              <HelpCircle className="w-4 h-4 stroke-[2.5]" />
+            </div>
+            <h3 className="text-sm font-black text-stone-900 dark:text-stone-100 uppercase tracking-wide">Help, Safety & Policies</h3>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-xl text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+            className="p-1 rounded-xl neo-btn text-stone-900 dark:text-stone-100 bg-white dark:bg-[#1A1A26] cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5 stroke-[2.5]" />
           </button>
         </div>
 
         {/* Tab Header */}
-        <div className="flex items-center px-6 pt-3 border-b border-stone-100 dark:border-stone-800 gap-4 text-xs overflow-x-auto scrollbar-none">
+        <div className="flex items-center px-4 sm:px-6 py-2.5 border-b-2 border-stone-900 dark:border-stone-800 gap-2 text-xs overflow-x-auto scrollbar-none bg-stone-50 dark:bg-[#14141F]">
           <button
             onClick={() => setActiveTab('faq')}
-            className={`pb-2.5 font-semibold border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === 'faq' ? 'border-amber-600 text-amber-700 dark:text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200'
+            className={`px-3 py-1.5 rounded-xl font-black uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === 'faq' ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' : 'text-stone-600 dark:text-stone-400 hover:text-stone-950 dark:hover:text-white'
             }`}
           >
             FAQs
           </button>
           <button
             onClick={() => setActiveTab('safety')}
-            className={`pb-2.5 font-semibold border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === 'safety' ? 'border-amber-600 text-amber-700 dark:text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200'
+            className={`px-3 py-1.5 rounded-xl font-black uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === 'safety' ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' : 'text-stone-600 dark:text-stone-400 hover:text-stone-950 dark:hover:text-white'
             }`}
           >
-            Safety Center
+            Safety
           </button>
           <button
             onClick={() => setActiveTab('policies')}
-            className={`pb-2.5 font-semibold border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === 'policies' ? 'border-amber-600 text-amber-700 dark:text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200'
+            className={`px-3 py-1.5 rounded-xl font-black uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === 'policies' ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' : 'text-stone-600 dark:text-stone-400 hover:text-stone-950 dark:hover:text-white'
             }`}
           >
-            Privacy & Terms
+            Policies
           </button>
           <button
             onClick={() => setActiveTab('recovery')}
-            className={`pb-2.5 font-semibold border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === 'recovery' ? 'border-amber-600 text-amber-700 dark:text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200'
+            className={`px-3 py-1.5 rounded-xl font-black uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === 'recovery' ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' : 'text-stone-600 dark:text-stone-400 hover:text-stone-950 dark:hover:text-white'
             }`}
           >
-            Recovery & Troubleshooting
+            Recovery
           </button>
           <button
             onClick={() => setActiveTab('contact')}
-            className={`pb-2.5 font-semibold border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === 'contact' ? 'border-amber-600 text-amber-700 dark:text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200'
+            className={`px-3 py-1.5 rounded-xl font-black uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === 'contact' ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' : 'text-stone-600 dark:text-stone-400 hover:text-stone-950 dark:hover:text-white'
             }`}
           >
-            Contact Support
+            Contact
           </button>
         </div>
 
@@ -235,45 +237,45 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose, onO
           )}
 
           {activeTab === 'contact' && (
-            <form onSubmit={handleSendTicket} className="space-y-3">
+            <form onSubmit={handleSendTicket} className="space-y-3.5">
               {ticketSent && (
-                <div className="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 text-xs rounded-xl border border-amber-200 dark:border-amber-800 flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <div className="p-3 bg-amber-200 dark:bg-amber-950/60 text-stone-950 dark:text-amber-200 text-xs font-black rounded-xl border-2 border-stone-900 flex items-center gap-2 shadow-[2px_2px_0px_#121217]">
+                  <CheckCircle className="w-4 h-4 stroke-[3] text-stone-950 shrink-0" />
                   <span>Your support ticket was submitted. Our team will review your inquiry.</span>
                 </div>
               )}
 
               <div>
-                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 block mb-1">Subject</label>
+                <label className="text-xs font-black uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1">Subject</label>
                 <input
                   type="text"
                   value={ticketSubject}
                   onChange={(e) => setTicketSubject(e.target.value)}
                   placeholder="e.g. Question about account recovery or note expiration"
-                  className="w-full text-xs p-2.5 bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-700 rounded-xl text-stone-800 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
+                  className="w-full text-xs font-bold p-3 neo-input text-stone-900 dark:text-stone-100"
                   required
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 block mb-1">Message</label>
+                <label className="text-xs font-black uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1">Message</label>
                 <textarea
                   value={ticketMessage}
                   onChange={(e) => setTicketMessage(e.target.value)}
                   rows={4}
                   placeholder="Describe your inquiry or request in detail..."
-                  className="w-full text-xs p-3 bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-700 rounded-xl text-stone-800 dark:text-stone-100 focus:outline-hidden focus:border-amber-500 resize-none"
+                  className="w-full text-xs font-bold p-3 neo-input text-stone-900 dark:text-stone-100 resize-none"
                   required
                 />
               </div>
 
-              <div className="flex justify-end pt-2">
+              <div className="flex justify-end pt-2 border-t-2 border-stone-900 dark:border-stone-800">
                 <button
                   type="submit"
                   disabled={isSubmitting || !ticketSubject.trim() || !ticketMessage.trim()}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-transform active:scale-98"
+                  className="px-5 py-2.5 neo-btn-primary disabled:opacity-50 text-stone-950 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Send className="w-3.5 h-3.5" />
+                  <Send className="w-3.5 h-3.5 stroke-[2.5]" />
                   <span>{isSubmitting ? 'Submitting...' : 'Send to Support'}</span>
                 </button>
               </div>

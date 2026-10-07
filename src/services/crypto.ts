@@ -399,13 +399,82 @@ export async function generateKeyFingerprint(phraseOrKey: string): Promise<strin
   return `KEY-${hex.substring(0, 8).toUpperCase()}-${hex.substring(8, 16).toUpperCase()}`;
 }
 
+// NIST P-256 (secp256r1) Constants for Deterministic Key Derivation
+const P256_P = 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffffn;
+const P256_A = P256_P - 3n;
+const P256_GX = 0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296n;
+const P256_GY = 0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5n;
+const P256_N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+
+function p256Mod(x: bigint, m: bigint = P256_P): bigint {
+  return ((x % m) + m) % m;
+}
+
+function p256ExtGCD(a: bigint, b: bigint): [bigint, bigint, bigint] {
+  if (b === 0n) return [1n, 0n, a];
+  const [x1, y1, d] = p256ExtGCD(b, a % b);
+  return [y1, x1 - (a / b) * y1, d];
+}
+
+function p256ModInverse(k: bigint, m: bigint = P256_P): bigint {
+  const [x] = p256ExtGCD(p256Mod(k, m), m);
+  return p256Mod(x, m);
+}
+
+interface P256Point {
+  x: bigint;
+  y: bigint;
+}
+
+function p256PointAdd(P: P256Point | null, Q: P256Point | null): P256Point | null {
+  if (!P) return Q;
+  if (!Q) return P;
+  if (P.x === Q.x) {
+    if (P.y !== Q.y) return null;
+    const m = p256Mod(p256Mod(3n * P.x * P.x + P256_A) * p256ModInverse(2n * P.y));
+    const rx = p256Mod(m * m - 2n * P.x);
+    const ry = p256Mod(m * (P.x - rx) - P.y);
+    return { x: rx, y: ry };
+  } else {
+    const m = p256Mod(p256Mod(Q.y - P.y) * p256ModInverse(Q.x - P.x));
+    const rx = p256Mod(m * m - P.x - Q.x);
+    const ry = p256Mod(m * (P.x - rx) - P.y);
+    return { x: rx, y: ry };
+  }
+}
+
+function p256ScalarMult(k: bigint, P: P256Point): P256Point {
+  let R: P256Point | null = null;
+  let S: P256Point | null = P;
+  let scalar = k;
+  while (scalar > 0n) {
+    if (scalar & 1n) R = p256PointAdd(R, S);
+    S = p256PointAdd(S, S);
+    scalar >>= 1n;
+  }
+  if (!R) throw new Error('Invalid scalar multiplication result');
+  return R;
+}
+
+function bigintToBase64Url(val: bigint): string {
+  const hex = val.toString(16).padStart(64, '0');
+  const bytes = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
+    bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+  }
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 /**
  * Deterministically derives an ECDH P-256 keypair from a 12-word recovery phrase.
- * DESIRED ARCHITECTURE:
- * Recovery phrase -> Secure KDF (PBKDF2 100,000 rounds) -> Deterministic seed -> Keypair.
+ * Pure mathematical derivation:
+ * Recovery phrase -> PBKDF2 (100,000 iterations) -> 256-bit scalar d -> Point (x, y) = d * G -> WebCrypto KeyPair.
  */
 export async function deriveKeypairFromRecoveryPhrase(phrase: string): Promise<CryptoKeyPair> {
-  // We use Web Crypto PBKDF2 to derive a 256-bit entropy seed
   const enc = new TextEncoder();
   const keyMaterial = await window.crypto.subtle.importKey(
     'raw',
@@ -415,7 +484,7 @@ export async function deriveKeypairFromRecoveryPhrase(phrase: string): Promise<C
     ['deriveBits']
   );
 
-  await window.crypto.subtle.deriveBits(
+  const derivedBits = await window.crypto.subtle.deriveBits(
     {
       name: 'PBKDF2',
       salt: enc.encode('notecircle_device_identity_recovery_salt_v2'),
@@ -426,8 +495,55 @@ export async function deriveKeypairFromRecoveryPhrase(phrase: string): Promise<C
     256
   );
 
-  // Generate standard ECDH keypair and cache with device identity
-  return generateDeviceKeyPair();
+  const seedBytes = new Uint8Array(derivedBits);
+  let hexSeed = '';
+  for (let i = 0; i < seedBytes.length; i++) {
+    hexSeed += seedBytes[i].toString(16).padStart(2, '0');
+  }
+
+  // Derive private scalar d in [1, n-1]
+  const rawD = BigInt('0x' + hexSeed);
+  const d = (rawD % (P256_N - 1n)) + 1n;
+
+  // Compute public point (x, y) = d * G
+  const pub = p256ScalarMult(d, { x: P256_GX, y: P256_GY });
+
+  const privJwk: JsonWebKey = {
+    kty: 'EC',
+    crv: 'P-256',
+    d: bigintToBase64Url(d),
+    x: bigintToBase64Url(pub.x),
+    y: bigintToBase64Url(pub.y),
+    ext: true,
+    key_ops: ['deriveKey', 'deriveBits']
+  };
+
+  const pubJwk: JsonWebKey = {
+    kty: 'EC',
+    crv: 'P-256',
+    x: bigintToBase64Url(pub.x),
+    y: bigintToBase64Url(pub.y),
+    ext: true,
+    key_ops: []
+  };
+
+  const privateKey = await window.crypto.subtle.importKey(
+    'jwk',
+    privJwk,
+    { name: 'ECDH', namedCurve: 'P-256' },
+    true,
+    ['deriveKey', 'deriveBits']
+  );
+
+  const publicKey = await window.crypto.subtle.importKey(
+    'jwk',
+    pubJwk,
+    { name: 'ECDH', namedCurve: 'P-256' },
+    true,
+    []
+  );
+
+  return { privateKey, publicKey };
 }
 
 /**
@@ -440,13 +556,13 @@ export async function initOrGetDeviceIdentity(): Promise<DeviceCryptoIdentity> {
       return existing as any;
     }
 
-    const keyPair = await generateDeviceKeyPair();
+    const phrase = generateRecoveryPhrase();
+    const keyPair = await deriveKeypairFromRecoveryPhrase(phrase);
     cachedKeyPair = keyPair;
 
     const pubJwk = await window.crypto.subtle.exportKey('jwk', keyPair.publicKey);
     const privJwk = await window.crypto.subtle.exportKey('jwk', keyPair.privateKey);
 
-    const phrase = generateRecoveryPhrase();
     const keyId = await generateKeyFingerprint(JSON.stringify(pubJwk));
     const deviceId = `dev_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
 

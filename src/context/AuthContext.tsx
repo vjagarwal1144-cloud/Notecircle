@@ -12,7 +12,6 @@ interface AuthContextType {
   login: (identifier: string, pass: string) => Promise<void>;
   register: (data: any) => Promise<void>;
   logout: () => Promise<void>;
-  switchUser: (username: string) => Promise<void>;
   unreadNotifsCount: number;
   refreshNotifications: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -20,6 +19,8 @@ interface AuthContextType {
   androidPreview: boolean;
   toggleAndroidPreview: () => void;
   syncOfflineQueue: () => Promise<void>;
+  onlineUserIds: Set<string>;
+  isUserOnline: (userId: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,6 +31,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
   const [androidPreview, setAndroidPreview] = useState(false);
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('notecircle_theme') === 'dark';
   });
@@ -106,44 +108,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     async function init() {
       setIsLoading(true);
-
-      const existingToken = getStoredToken();
-      const userLoggedOut = localStorage.getItem('notecircle_logged_out') === 'true';
-
-      if (existingToken) {
-        try {
-          const res = await api.getCurrentUser();
-          setCurrentUser(res.user);
-        } catch {
-          // Token expired or revoked; attempt automatic demo sign-in if not explicitly logged out
-          if (!userLoggedOut) {
-            try {
-              const res = await api.login('rahul', 'password123');
-              setStoredToken(res.token);
-              setCurrentUser(res.user);
-            } catch {
-              setStoredToken(null);
-              setCurrentUser(null);
-            }
-          } else {
-            setStoredToken(null);
-            setCurrentUser(null);
-          }
-        }
-      } else if (!userLoggedOut) {
-        // First-time visit: default seamlessly to Rahul Sharma so full circle experience is active
-        try {
-          const res = await api.login('rahul', 'password123');
-          setStoredToken(res.token);
-          setCurrentUser(res.user);
-        } catch {
-          setCurrentUser(null);
-        }
-      } else {
+      try {
+        // Authenticate with server-side HttpOnly session cookie or in-memory token
+        const res = await api.getCurrentUser();
+        setCurrentUser(res.user);
+      } catch {
         setCurrentUser(null);
+      } finally {
+        setIsLoading(false);
       }
-
-      setIsLoading(false);
     }
 
     init();
@@ -153,27 +126,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (currentUser) {
       refreshNotifications();
       const interval = setInterval(refreshNotifications, 15000);
-      return () => clearInterval(interval);
+
+      // Establish realtime presence and notifications WebSocket
+      let ws: WebSocket | null = null;
+      let reconnectTimer: any = null;
+
+      function connectWs() {
+        if (!currentUser) return;
+        try {
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const token = getStoredToken();
+          const wsUrl = `${protocol}//${window.location.host}/ws${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+          ws = new WebSocket(wsUrl);
+
+          ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.event === 'presence_update') {
+                const { userId, status } = data.payload || {};
+                if (userId) {
+                  setOnlineUserIds((prev) => {
+                    const next = new Set(prev);
+                    if (status === 'online') next.add(userId);
+                    else next.delete(userId);
+                    return next;
+                  });
+                }
+                window.dispatchEvent(new CustomEvent('notecircle:presence_update', { detail: data.payload }));
+              } else if (data.event === 'new_message') {
+                window.dispatchEvent(new CustomEvent('notecircle:new_message', { detail: data.payload }));
+                refreshNotifications();
+              } else if (data.event === 'message_deleted') {
+                window.dispatchEvent(new CustomEvent('notecircle:message_deleted', { detail: data.payload }));
+              } else if (data.event === 'message_reaction') {
+                window.dispatchEvent(new CustomEvent('notecircle:message_reaction', { detail: data.payload }));
+              } else if (data.event === 'notification') {
+                window.dispatchEvent(new CustomEvent('notecircle:notification', { detail: data.payload }));
+                refreshNotifications();
+              }
+            } catch {}
+          };
+
+          ws.onclose = () => {
+            reconnectTimer = setTimeout(connectWs, 3000);
+          };
+
+          ws.onerror = () => {
+            try { ws?.close(); } catch {}
+          };
+        } catch {}
+      }
+
+      connectWs();
+
+      return () => {
+        clearInterval(interval);
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        try { ws?.close(); } catch {}
+      };
     }
   }, [currentUser, refreshNotifications]);
 
   const login = async (identifier: string, pass: string) => {
     setIsLoading(true);
     try {
-      localStorage.removeItem('notecircle_logged_out');
       const res = await api.login(identifier, pass);
-      setStoredToken(res.token);
-      setCurrentUser(res.user);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const switchUser = async (username: string) => {
-    setIsLoading(true);
-    try {
-      localStorage.removeItem('notecircle_logged_out');
-      const res = await api.login(username, 'password123');
       setStoredToken(res.token);
       setCurrentUser(res.user);
     } finally {
@@ -184,7 +201,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (data: any) => {
     setIsLoading(true);
     try {
-      localStorage.removeItem('notecircle_logged_out');
       const res = await api.register(data);
       setStoredToken(res.token);
       setCurrentUser(res.user);
@@ -195,7 +211,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      localStorage.setItem('notecircle_logged_out', 'true');
       await api.logout();
       await localDb.clearAllLocalData();
     } catch {}
@@ -223,14 +238,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         register,
         logout,
-        switchUser,
         unreadNotifsCount,
         refreshNotifications,
         refreshUser,
         updateAvailability,
         androidPreview,
         toggleAndroidPreview,
-        syncOfflineQueue
+        syncOfflineQueue,
+        onlineUserIds,
+        isUserOnline: (uid: string) => onlineUserIds.has(uid)
       }}
     >
       {children}

@@ -29,7 +29,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onOpenChatWithUser,
   onOpenCreateNote
 }) => {
-  const { currentUser, refreshUser } = useAuth();
+  const { currentUser, refreshUser, isUserOnline } = useAuth();
   const targetUsername = username || currentUser?.username || '';
   const isSelf = Boolean(currentUser && currentUser.username.toLowerCase() === targetUsername.toLowerCase());
 
@@ -154,20 +154,22 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       )}
 
       {/* Profile Header Card */}
-      <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-xs p-6">
-        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
-          <UserAvatar name={profile.displayName} src={profile.avatarUrl} size="xl" />
+      <div className="neo-card bg-white dark:bg-[#161622] p-6 shadow-[5px_5px_0px_0px_#121217] dark:shadow-[5px_5px_0px_0px_#050508]">
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4.5">
+          <div className="border-2.5 border-stone-900 rounded-full p-1 shadow-[3px_3px_0px_0px_#121217] bg-white dark:bg-stone-850 shrink-0">
+            <UserAvatar name={profile.displayName} src={profile.avatarUrl} size="xl" isOnline={isUserOnline(profile.id)} />
+          </div>
 
           <div className="flex-1 text-center sm:text-left min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100 font-display">{profile.displayName}</h2>
-                <div className="flex items-center justify-center sm:justify-start gap-2 text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                <h2 className="text-xl font-black text-stone-950 dark:text-stone-50 font-display">{profile.displayName}</h2>
+                <div className="flex items-center justify-center sm:justify-start gap-2 text-xs font-bold text-stone-500 dark:text-stone-400 mt-1">
                   <span>@{profile.username}</span>
                   <span aria-hidden="true">·</span>
-                  <span className="flex items-center gap-1 font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
-                    <Lock className="w-3 h-3 text-amber-600" />
-                    <span>Private Account</span>
+                  <span className="neo-badge bg-amber-300 text-stone-950 text-[9.5px]">
+                    <Lock className="w-3 h-3 text-stone-950 stroke-[2.5]" />
+                    <span>Private Circle</span>
                   </span>
                 </div>
               </div>
@@ -177,9 +179,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 {isSelf ? (
                   <button
                     onClick={() => setIsEditing(true)}
-                    className="px-3 py-1.5 bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    className="px-3.5 py-2 neo-btn text-xs font-black text-stone-900 dark:text-stone-100 bg-white dark:bg-[#1A1A26] flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Edit3 className="w-3.5 h-3.5" />
+                    <Edit3 className="w-3.5 h-3.5 stroke-[2.5]" />
                     <span>Edit Profile</span>
                   </button>
                 ) : (
@@ -187,29 +189,29 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     {profile.isConnection ? (
                       <button
                         onClick={() => onOpenChatWithUser?.(profile.id)}
-                        className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs cursor-pointer"
+                        className="px-4 py-2 neo-btn-primary text-xs font-black flex items-center gap-1.5 cursor-pointer"
                       >
-                        <MessageSquare className="w-3.5 h-3.5" />
+                        <MessageSquare className="w-3.5 h-3.5 stroke-[2.5]" />
                         <span>Message</span>
                       </button>
                     ) : profile.isPendingRequest ? (
-                      <span className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 rounded-lg text-xs font-medium border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+                      <span className="px-3.5 py-1.5 bg-amber-100 dark:bg-amber-950/60 text-stone-950 dark:text-amber-200 rounded-xl text-xs font-black border-2 border-stone-900 flex items-center gap-1 shadow-[2px_2px_0px_0px_#121217]">
                         <Clock className="w-3.5 h-3.5" />
                         <span>Request Pending</span>
                       </span>
                     ) : (
                       <button
                         onClick={handleSendFollowRequest}
-                        className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs cursor-pointer"
+                        className="px-4 py-2 neo-btn-primary text-xs font-black flex items-center gap-1.5 cursor-pointer"
                       >
-                        <UserPlus className="w-3.5 h-3.5" />
+                        <UserPlus className="w-3.5 h-3.5 stroke-[2.5]" />
                         <span>Request Follow</span>
                       </button>
                     )}
 
                     <button
                       onClick={handleReport}
-                      className="p-1.5 text-stone-400 hover:text-rose-600 rounded-lg"
+                      className="p-2 neo-btn text-stone-600 dark:text-stone-300 hover:text-rose-600 bg-white dark:bg-[#1A1A26] cursor-pointer"
                       title="Report account"
                     >
                       <ShieldAlert className="w-4 h-4" />
@@ -220,17 +222,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             </div>
 
             {/* Counts */}
-            <div className="flex items-center justify-center sm:justify-start gap-4 mt-4 text-xs text-stone-600 dark:text-stone-400 border-t border-stone-100 dark:border-stone-800 pt-3">
-              <div>
-                <span className="font-bold text-stone-900 dark:text-stone-100 mr-1 tabular-nums">{profile.followersCount}</span>
-                <span className="text-stone-400">Followers</span>
+            <div className="flex items-center justify-center sm:justify-start gap-4 mt-4 text-xs font-black text-stone-700 dark:text-stone-300 border-t-2 border-stone-100 dark:border-stone-800 pt-3">
+              <div className="p-1.5 bg-stone-100 dark:bg-stone-850 rounded-xl border border-stone-900 px-3">
+                <span className="font-black text-stone-950 dark:text-stone-50 mr-1.5 tabular-nums">{profile.followersCount}</span>
+                <span className="text-stone-500 uppercase text-[10px]">Followers</span>
               </div>
-              <div>
-                <span className="font-bold text-stone-900 dark:text-stone-100 mr-1 tabular-nums">{profile.followingCount}</span>
-                <span className="text-stone-400">Following</span>
+              <div className="p-1.5 bg-stone-100 dark:bg-stone-850 rounded-xl border border-stone-900 px-3">
+                <span className="font-black text-stone-950 dark:text-stone-50 mr-1.5 tabular-nums">{profile.followingCount}</span>
+                <span className="text-stone-500 uppercase text-[10px]">Following</span>
               </div>
               {profile.isCloseFriend && (
-                <span className="text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded font-semibold border border-amber-200 dark:border-amber-800">
+                <span className="neo-badge bg-rose-500 text-white text-[9.5px]">
                   Close Friend
                 </span>
               )}
@@ -240,55 +242,57 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       </div>
 
       {/* Active Note Card on Profile */}
-      <div className="mb-6">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-          Current Note
+      <div className="mb-6 space-y-2">
+        <h3 className="text-xs font-black text-stone-950 dark:text-stone-300 uppercase tracking-wider font-display">
+          Current Note Broadcast
         </h3>
 
         {profile.isConnection || isSelf ? (
           profile.activeNote ? (
-            <div className="p-4 bg-amber-50/60 dark:bg-amber-950/40 rounded-2xl border border-amber-200/80 dark:border-amber-800/40 shadow-xs flex items-start gap-3">
-              <span className="text-2xl select-none">{profile.activeNote.emoji}</span>
+            <div className="neo-card p-4 sm:p-5 bg-amber-50 dark:bg-[#1F1C16] border-2 border-stone-900 shadow-[4px_4px_0px_0px_#FF9F1C] flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-white dark:bg-stone-850 border-2 border-stone-900 text-2xl flex items-center justify-center shrink-0 shadow-[2px_2px_0px_0px_#121217]">
+                {profile.activeNote.emoji}
+              </div>
               <div className="flex-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-stone-900 dark:text-stone-100">
+                  <span className="text-xs font-black text-stone-950 dark:text-stone-50">
                     {profile.activeNote.categoryLabel}
                   </span>
-                  <span className="text-[10px] text-stone-400 flex items-center gap-1 font-medium">
+                  <span className="text-[10.5px] text-stone-500 font-bold flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     {profile.activeNote.expiresAt ? 'Temporary note' : 'Permanent'}
                   </span>
                 </div>
-                <p className="text-xs sm:text-sm text-stone-800 dark:text-stone-200 mt-1 leading-relaxed">
+                <p className="text-xs sm:text-sm font-bold text-stone-900 dark:text-stone-100 mt-1 leading-relaxed">
                   "{profile.activeNote.text}"
                 </p>
               </div>
             </div>
           ) : (
-            <div className="p-4 bg-white dark:bg-stone-850 rounded-2xl border border-stone-200 dark:border-stone-800 text-xs text-stone-400 text-center">
-              No active note right now.
+            <div className="neo-card p-5 bg-white dark:bg-[#161622] text-xs font-bold text-stone-500 text-center">
+              No active note broadcasted right now.
               {isSelf && (
                 <button
                   onClick={onOpenCreateNote}
-                  className="block mx-auto mt-2 text-amber-600 dark:text-amber-400 font-semibold hover:underline cursor-pointer"
+                  className="block mx-auto mt-2 text-amber-600 dark:text-amber-400 font-black hover:underline cursor-pointer"
                 >
-                  Post a note
+                  Post a note to your circle
                 </button>
               )}
             </div>
           )
         ) : (
           /* Privacy Barrier for Strangers */
-          <div className="p-6 bg-stone-50 dark:bg-stone-900/60 rounded-2xl border border-stone-200 dark:border-stone-800 text-center">
-            <Lock className="w-6 h-6 text-stone-400 mx-auto mb-2" />
-            <p className="text-xs font-bold text-stone-900 dark:text-stone-100">Notes are private</p>
-            <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5 max-w-xs mx-auto">
-              Follow {profile.displayName.split(' ')[0]} to see their temporary status notes and availability.
+          <div className="neo-card p-6 bg-white dark:bg-[#161622] text-center shadow-[4px_4px_0px_0px_#121217]">
+            <Lock className="w-7 h-7 text-stone-950 dark:text-white mx-auto mb-2 stroke-[2.5]" />
+            <p className="text-sm font-black text-stone-950 dark:text-stone-50 font-display">Notes are private to circle</p>
+            <p className="text-xs font-bold text-stone-500 dark:text-stone-400 mt-0.5 max-w-xs mx-auto">
+              Follow {profile.displayName.split(' ')[0]} to view their temporary status notes and live presence.
             </p>
             {!profile.isPendingRequest && (
               <button
                 onClick={handleSendFollowRequest}
-                className="mt-3 px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-semibold hover:bg-amber-700 shadow-xs cursor-pointer"
+                className="mt-3.5 px-4 py-2 neo-btn-primary text-xs font-black cursor-pointer"
               >
                 Send Follow Request
               </button>
@@ -299,33 +303,33 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
       {/* About & Profile Details */}
       {(profile.isConnection || isSelf) && (
-        <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200/80 dark:border-stone-800 p-6 space-y-3 shadow-xs">
-          <h3 className="text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider">
-            About
+        <div className="neo-card bg-white dark:bg-[#161622] p-6 space-y-3 shadow-[4px_4px_0px_0px_#121217]">
+          <h3 className="text-xs font-black text-stone-950 dark:text-stone-300 uppercase tracking-wider font-display">
+            About {profile.displayName.split(' ')[0]}
           </h3>
 
           {profile.bio && (
-            <p className="text-xs sm:text-sm text-stone-700 dark:text-stone-300 leading-relaxed font-normal">
+            <p className="text-xs sm:text-sm font-bold text-stone-800 dark:text-stone-200 leading-relaxed">
               {profile.bio}
             </p>
           )}
 
-          <div className="space-y-2 pt-2 border-t border-stone-100 dark:border-stone-800 text-xs text-stone-600 dark:text-stone-400">
+          <div className="space-y-2 pt-3 border-t-2 border-stone-100 dark:border-stone-800 text-xs font-bold text-stone-700 dark:text-stone-300">
             {profile.city && (
               <div className="flex items-center gap-2">
-                <MapPin className="w-3.5 h-3.5 text-stone-400" />
+                <MapPin className="w-4 h-4 text-amber-600" />
                 <span>{profile.city}</span>
               </div>
             )}
             {profile.workplace && (
               <div className="flex items-center gap-2">
-                <Briefcase className="w-3.5 h-3.5 text-stone-400" />
+                <Briefcase className="w-4 h-4 text-indigo-600" />
                 <span>{profile.workplace}</span>
               </div>
             )}
             {profile.birthday && (
               <div className="flex items-center gap-2">
-                <Calendar className="w-3.5 h-3.5 text-stone-400" />
+                <Calendar className="w-4 h-4 text-rose-500" />
                 <span>Birthday: {profile.birthday}</span>
               </div>
             )}
@@ -335,68 +339,68 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
       {/* Edit Profile Modal */}
       {isEditing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/70 backdrop-blur-xs">
           <form
             onSubmit={handleSaveProfile}
-            className="bg-white dark:bg-[#1C1A18] w-full max-w-md rounded-3xl shadow-2xl border border-stone-200/80 dark:border-stone-800 p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150"
+            className="neo-card bg-white dark:bg-[#161622] w-full max-w-md rounded-3xl shadow-[6px_6px_0px_#121217] p-6 space-y-4"
           >
-            <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 border-b border-stone-100 dark:border-stone-800 pb-2 font-display">
+            <h3 className="text-sm font-black text-stone-900 dark:text-stone-100 uppercase tracking-wide border-b-2 border-stone-900 dark:border-stone-800 pb-2">
               Edit Your Profile
             </h3>
 
             <div>
-              <label className="text-xs font-medium text-stone-600 dark:text-stone-300 block mb-1">Display Name</label>
+              <label className="text-xs font-black uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1">Display Name</label>
               <input
                 type="text"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                className="w-full text-xs p-2.5 border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-850 rounded-xl text-stone-800 dark:text-stone-200 focus:outline-hidden focus:border-amber-500"
+                className="w-full text-xs font-bold p-3 neo-input text-stone-900 dark:text-stone-100"
                 required
               />
             </div>
 
             <div>
-              <label className="text-xs font-medium text-stone-600 dark:text-stone-300 block mb-1">Bio</label>
+              <label className="text-xs font-black uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1">Bio</label>
               <textarea
                 value={editBio}
                 onChange={(e) => setEditBio(e.target.value)}
                 rows={3}
-                className="w-full text-xs p-2.5 border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-850 rounded-xl text-stone-800 dark:text-stone-200 focus:outline-hidden focus:border-amber-500 resize-none"
+                className="w-full text-xs font-bold p-3 neo-input text-stone-900 dark:text-stone-100 resize-none"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-xs font-medium text-stone-600 dark:text-stone-300 block mb-1">City</label>
+                <label className="text-xs font-black uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1">City</label>
                 <input
                   type="text"
                   value={editCity}
                   onChange={(e) => setEditCity(e.target.value)}
-                  className="w-full text-xs p-2 border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-850 rounded-xl text-stone-800 dark:text-stone-200 focus:outline-hidden focus:border-amber-500"
+                  className="w-full text-xs font-bold p-2.5 neo-input text-stone-900 dark:text-stone-100"
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-stone-600 dark:text-stone-300 block mb-1">Workplace</label>
+                <label className="text-xs font-black uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1">Workplace</label>
                 <input
                   type="text"
                   value={editWorkplace}
                   onChange={(e) => setEditWorkplace(e.target.value)}
-                  className="w-full text-xs p-2 border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-850 rounded-xl text-stone-800 dark:text-stone-200 focus:outline-hidden focus:border-amber-500"
+                  className="w-full text-xs font-bold p-2.5 neo-input text-stone-900 dark:text-stone-100"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t-2 border-stone-900 dark:border-stone-800">
               <button
                 type="button"
                 onClick={() => setIsEditing(false)}
-                className="px-3.5 py-2 text-xs text-stone-600 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200"
+                className="px-3.5 py-2 text-xs font-bold text-stone-600 dark:text-stone-400 hover:underline cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-amber-600 text-white rounded-xl text-xs font-semibold hover:bg-amber-700 shadow-xs cursor-pointer transition-transform active:scale-98"
+                className="px-4 py-2 neo-btn-primary text-stone-950 rounded-xl text-xs font-black cursor-pointer"
               >
                 Save Changes
               </button>

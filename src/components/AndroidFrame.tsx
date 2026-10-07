@@ -17,7 +17,7 @@ export const AndroidFrame: React.FC<AndroidFrameProps> = ({
   const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className="py-6 px-4 flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] bg-slate-900/10">
+    <div className="py-6 px-4 flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] bg-stone-900/5 dark:bg-black/25">
       
       {/* Top Banner explaining Android Preview Mode */}
       <div className="mb-4 flex items-center gap-3 bg-white/90 dark:bg-stone-900/90 backdrop-blur-md px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-800 shadow-xs text-xs text-stone-700 dark:text-stone-300">

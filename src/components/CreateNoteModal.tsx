@@ -81,6 +81,13 @@ const NOTE_TEMPLATES: TemplateItem[] = [
     title: 'Gaming',
     defaultText: 'Gaming for a while. Catch you later.',
     defaultDuration: '3_hours'
+  },
+  {
+    emoji: '✨',
+    category: 'other',
+    title: 'Other',
+    defaultText: 'Doing my own thing right now. Hit me up later!',
+    defaultDuration: '4_hours'
   }
 ];
 
@@ -159,53 +166,55 @@ export const CreateNoteModal: React.FC<CreateNoteModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-xs">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-stone-950/70 backdrop-blur-xs">
       <div 
-        className="bg-white dark:bg-[#1C1A18] border border-stone-200/80 dark:border-stone-800 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150"
+        className="neo-card bg-white dark:bg-[#161622] w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-[8px_8px_0px_0px_#121217] dark:shadow-[8px_8px_0px_0px_#050508] overflow-hidden flex flex-col max-h-[92dvh] animate-in slide-in-from-bottom sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-150"
         role="dialog"
       >
-        {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-stone-100 dark:border-stone-800/80 flex items-center justify-between">
+        {/* Mobile Pull Handle */}
+        <div className="sm:hidden w-12 h-1 bg-stone-400 dark:bg-stone-600 rounded-full mx-auto mt-2.5 mb-1" />
+
+        {/* Modal Collar Header */}
+        <div className="px-5 sm:px-6 py-3.5 bg-amber-400 dark:bg-amber-400/90 border-b-2.5 border-stone-900 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-stone-900 dark:text-stone-100 font-display">Post a Note</span>
-            <span className="text-[11px] text-stone-500 dark:text-stone-400 font-normal">
-              Temporary & private to your circle
-            </span>
+            <span className="neo-badge bg-stone-950 text-white">Broadcast</span>
+            <span className="text-sm font-black text-stone-950 font-display">Post Circle Note</span>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-xl text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+            className="p-1.5 rounded-xl neo-btn bg-white text-stone-950 border-2 border-stone-900 cursor-pointer"
+            title="Close"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4 stroke-[3]" />
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto space-y-4">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4.5">
           {error && (
-            <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs rounded-xl border border-rose-200 dark:border-rose-900">
+            <div className="p-3 bg-rose-100 dark:bg-rose-950 text-rose-900 dark:text-rose-200 text-xs font-black rounded-xl border-2 border-stone-900 shadow-[2px_2px_0px_0px_#121217]">
               {error}
             </div>
           )}
 
-          {/* Quick 1-Tap Templates */}
+          {/* Quick 10-Second Templates */}
           <div>
-            <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 flex items-center gap-1.5 mb-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+            <label className="text-xs font-black text-stone-900 dark:text-stone-100 flex items-center gap-1.5 mb-2 uppercase tracking-wide">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
               <span>Quick 10-Second Templates</span>
             </label>
-            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-none">
               {NOTE_TEMPLATES.map((tmpl) => (
                 <button
                   key={tmpl.title}
                   type="button"
                   onClick={() => handleApplyTemplate(tmpl)}
-                  className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border flex items-center gap-1.5 shrink-0 ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all border-2 border-stone-900 flex items-center gap-1.5 shrink-0 cursor-pointer ${
                     category === tmpl.category
-                      ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700 shadow-xs'
-                      : 'neu-button text-stone-700 dark:text-stone-300'
+                      ? 'bg-amber-400 text-stone-950 shadow-[2.5px_2.5px_0px_0px_#121217] scale-[1.02]'
+                      : 'bg-white dark:bg-[#1A1A26] text-stone-900 dark:text-stone-100 hover:bg-amber-100 shadow-[1.5px_1.5px_0px_0px_#121217]'
                   }`}
                 >
-                  <span>{tmpl.emoji}</span>
+                  <span className="text-sm select-none">{tmpl.emoji}</span>
                   <span>{tmpl.title}</span>
                 </button>
               ))}
@@ -214,66 +223,68 @@ export const CreateNoteModal: React.FC<CreateNoteModalProps> = ({
 
           {/* Note Input */}
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">What are you up to?</label>
-              <span className="text-[11px] text-stone-400">{text.length}/280</span>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-black text-stone-900 dark:text-stone-100 uppercase tracking-wide">
+                What are you up to?
+              </label>
+              <span className="text-[11px] font-bold text-stone-500 dark:text-stone-400">{text.length}/280</span>
             </div>
-            <div className="border border-stone-200 dark:border-stone-750 rounded-2xl bg-white dark:bg-stone-900 focus-within:border-amber-500 shadow-xs overflow-hidden transition-colors">
-              <div className="p-2 flex items-center gap-2 border-b border-stone-100 dark:border-stone-800 bg-stone-50/70 dark:bg-stone-850">
-                <span className="text-xl select-none">{selectedEmoji}</span>
+            <div className="neo-card bg-white dark:bg-[#1A1A26] overflow-hidden">
+              <div className="p-2.5 flex items-center gap-2.5 border-b-2 border-stone-900 dark:border-stone-700 bg-stone-100 dark:bg-[#202030]">
+                <span className="text-2xl select-none">{selectedEmoji}</span>
                 <input
                   type="text"
                   value={selectedEmoji}
                   onChange={(e) => setSelectedEmoji(e.target.value.slice(0, 2))}
-                  className="w-8 text-center text-xs font-bold bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg p-0.5 text-stone-900 dark:text-stone-100"
-                  title="Custom emoji"
+                  className="w-10 text-center text-sm font-black bg-white dark:bg-stone-800 border-2 border-stone-900 rounded-lg p-1 text-stone-900 dark:text-stone-100"
+                  title="Custom emoji icon"
                 />
-                <span className="text-[11px] text-stone-500 dark:text-stone-400 font-medium">Custom icon</span>
+                <span className="text-[11px] font-black text-stone-700 dark:text-stone-300 uppercase">Custom Icon</span>
               </div>
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value.slice(0, 280))}
                 rows={3}
-                placeholder="Let your people know what you're doing without having to message everyone individually..."
-                className="w-full p-3 text-xs sm:text-sm text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 bg-transparent focus:outline-hidden resize-none"
+                placeholder="Let your people know what you're doing without broadcasting to the world..."
+                className="w-full p-3.5 text-xs sm:text-sm font-bold text-stone-900 dark:text-stone-100 placeholder:text-stone-400 bg-transparent focus:outline-hidden resize-none font-display"
               />
             </div>
           </div>
 
           {/* Audience Selection */}
           <div>
-            <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 flex items-center gap-1.5 mb-1.5">
-              <Users className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400" />
-              <span>Audience</span>
+            <label className="text-xs font-black text-stone-900 dark:text-stone-100 flex items-center gap-1.5 mb-2 uppercase tracking-wide">
+              <Users className="w-3.5 h-3.5 text-stone-700 dark:text-stone-300" />
+              <span>Target Audience</span>
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2.5">
               <button
                 type="button"
                 onClick={() => setAudience('followers')}
-                className={`p-3 rounded-2xl border text-left transition-all ${
+                className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer ${
                   audience === 'followers'
-                    ? 'border-amber-600 bg-amber-50/70 dark:bg-amber-950/30 dark:border-amber-600 ring-1 ring-amber-600 shadow-xs'
-                    : 'neu-button text-stone-800 dark:text-stone-200'
+                    ? 'border-stone-900 bg-amber-300 dark:bg-amber-400 text-stone-950 shadow-[3px_3px_0px_0px_#121217]'
+                    : 'border-stone-900/40 dark:border-stone-700 bg-white dark:bg-[#1A1A26] text-stone-800 dark:text-stone-200 hover:border-stone-900'
                 }`}
               >
-                <div className="text-xs font-bold text-stone-900 dark:text-stone-100">Approved Followers</div>
-                <div className="text-[10px] text-stone-500 dark:text-stone-400 mt-0.5">All your verified connections</div>
+                <div className="text-xs font-black">All Circle</div>
+                <div className="text-[10px] font-bold opacity-80 mt-0.5">Approved connections only</div>
               </button>
 
               <button
                 type="button"
                 onClick={() => setAudience('close_friends')}
-                className={`p-3 rounded-2xl border text-left transition-all ${
+                className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer ${
                   audience === 'close_friends'
-                    ? 'border-amber-600 bg-amber-50/70 dark:bg-amber-950/30 dark:border-amber-600 ring-1 ring-amber-600 shadow-xs'
-                    : 'neu-button text-stone-800 dark:text-stone-200'
+                    ? 'border-stone-900 bg-rose-400 dark:bg-rose-500 text-white shadow-[3px_3px_0px_0px_#121217]'
+                    : 'border-stone-900/40 dark:border-stone-700 bg-white dark:bg-[#1A1A26] text-stone-800 dark:text-stone-200 hover:border-stone-900'
                 }`}
               >
-                <div className="text-xs font-bold text-amber-900 dark:text-amber-300 flex items-center gap-1">
+                <div className="text-xs font-black flex items-center gap-1">
                   <span>Close Friends</span>
-                  <span className="text-[9px] bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100 px-1 py-0.2 rounded-md font-bold">Only</span>
+                  <span className="text-[9px] bg-stone-950 text-white px-1 py-0.2 rounded font-black">Only</span>
                 </div>
-                <div className="text-[10px] text-stone-500 dark:text-stone-400 mt-0.5">Strictly your chosen inner circle</div>
+                <div className="text-[10px] font-bold opacity-80 mt-0.5">Strictly inner circle</div>
               </button>
             </div>
           </div>
@@ -281,14 +292,14 @@ export const CreateNoteModal: React.FC<CreateNoteModalProps> = ({
           {/* Expiration Settings & Optional Schedule */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 flex items-center gap-1.5 mb-1">
-                <Clock className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400" />
-                <span>Expires after</span>
+              <label className="text-xs font-black text-stone-900 dark:text-stone-100 flex items-center gap-1.5 mb-1.5">
+                <Clock className="w-3.5 h-3.5 text-stone-600 dark:text-stone-400" />
+                <span>Expires After</span>
               </label>
               <select
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
-                className="w-full text-xs font-medium bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl p-2.5 text-stone-800 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
+                className="w-full text-xs font-bold p-2.5 neo-input text-stone-900 dark:text-stone-100 cursor-pointer"
               >
                 <option value="1_hour">1 hour</option>
                 <option value="3_hours">3 hours</option>
@@ -302,38 +313,38 @@ export const CreateNoteModal: React.FC<CreateNoteModalProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 flex items-center gap-1.5 mb-1">
-                <Calendar className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400" />
-                <span>Schedule for later (Optional)</span>
+              <label className="text-xs font-black text-stone-900 dark:text-stone-100 flex items-center gap-1.5 mb-1.5">
+                <Calendar className="w-3.5 h-3.5 text-stone-600 dark:text-stone-400" />
+                <span>Schedule Later</span>
               </label>
               <input
                 type="datetime-local"
                 value={scheduledFor}
                 onChange={(e) => setScheduledFor(e.target.value)}
-                className="w-full text-xs font-medium bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl p-2 text-stone-800 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
+                className="w-full text-xs font-bold p-2.5 neo-input text-stone-900 dark:text-stone-100"
               />
             </div>
           </div>
 
           {/* Privacy Preview Banner */}
-          <div className="p-2.5 bg-stone-50 dark:bg-stone-850 rounded-2xl border border-stone-200/80 dark:border-stone-750 flex items-center justify-between text-xs text-stone-600 dark:text-stone-300">
-            <div className="flex items-center gap-1.5 font-medium">
-              <Lock className="w-3.5 h-3.5 text-amber-600" />
-              <span>Who can see this?</span>
+          <div className="p-3 bg-amber-50 dark:bg-[#1F1C16] rounded-2xl border-2 border-stone-900 dark:border-amber-500/80 flex items-center justify-between text-xs font-black shadow-[2px_2px_0px_0px_#FF9F1C]">
+            <div className="flex items-center gap-1.5">
+              <Lock className="w-4 h-4 text-amber-600" />
+              <span>Circle Privacy Guard:</span>
             </div>
-            <span className="font-bold text-stone-800 dark:text-stone-200">
-              {audience === 'close_friends' ? 'Only Close Friends' : 'Approved Followers Only'} · Expires in {duration.replace('_', ' ')}
+            <span className="text-stone-900 dark:text-stone-100">
+              {audience === 'close_friends' ? 'Close Friends Only' : 'Circle Only'} · {duration.replace('_', ' ')}
             </span>
           </div>
 
           {/* Interaction Toggles */}
-          <div className="pt-2 border-t border-stone-100 dark:border-stone-800 flex flex-wrap items-center justify-between text-xs text-stone-600 dark:text-stone-300 gap-2">
+          <div className="pt-2 border-t-2 border-stone-100 dark:border-stone-800 flex flex-wrap items-center justify-between text-xs font-black text-stone-800 dark:text-stone-200 gap-3">
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={allowReplies}
                 onChange={(e) => setAllowReplies(e.target.checked)}
-                className="rounded-md border-stone-300 text-amber-600 focus:ring-amber-500"
+                className="w-4 h-4 rounded-md border-2 border-stone-900 text-amber-500 cursor-pointer"
               />
               <span className="flex items-center gap-1">
                 <MessageCircle className="w-3.5 h-3.5" /> Allow replies
@@ -345,7 +356,7 @@ export const CreateNoteModal: React.FC<CreateNoteModalProps> = ({
                 type="checkbox"
                 checked={allowReactions}
                 onChange={(e) => setAllowReactions(e.target.checked)}
-                className="rounded-md border-stone-300 text-amber-600 focus:ring-amber-500"
+                className="w-4 h-4 rounded-md border-2 border-stone-900 text-amber-500 cursor-pointer"
               />
               <span className="flex items-center gap-1">
                 <Heart className="w-3.5 h-3.5" /> Allow reactions
@@ -357,7 +368,7 @@ export const CreateNoteModal: React.FC<CreateNoteModalProps> = ({
                 type="checkbox"
                 checked={isPinned}
                 onChange={(e) => setIsPinned(e.target.checked)}
-                className="rounded-md border-stone-300 text-amber-600 focus:ring-amber-500"
+                className="w-4 h-4 rounded-md border-2 border-stone-900 text-amber-500 cursor-pointer"
               />
               <span className="flex items-center gap-1">
                 <Pin className="w-3.5 h-3.5" /> Pin note
@@ -367,22 +378,22 @@ export const CreateNoteModal: React.FC<CreateNoteModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-stone-100 dark:border-stone-800/80 bg-stone-50/70 dark:bg-stone-850 flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-3.5 border-t-2 border-stone-900 dark:border-stone-750 bg-stone-100 dark:bg-[#1D1D2B] flex items-center justify-between pb-[max(0.875rem,env(safe-area-inset-bottom))]">
           <button
             type="button"
             disabled={isSubmitting || !text.trim()}
             onClick={() => handlePostNote(true)}
-            className="px-3 py-1.5 text-xs font-semibold text-stone-700 dark:text-stone-300 hover:text-stone-900 rounded-xl neu-button flex items-center gap-1"
+            className="px-3 py-2 text-xs font-black neo-btn bg-white dark:bg-[#161622] flex items-center gap-1.5 cursor-pointer"
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>Save Draft</span>
+            <span>Draft</span>
           </button>
 
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-3.5 py-2 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+              className="px-4 py-2 neo-btn text-xs font-black cursor-pointer"
             >
               Cancel
             </button>
@@ -390,9 +401,9 @@ export const CreateNoteModal: React.FC<CreateNoteModalProps> = ({
               type="button"
               disabled={isSubmitting || !text.trim()}
               onClick={() => handlePostNote(false)}
-              className="px-4 py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 rounded-xl shadow-xs transition-transform active:scale-98"
+              className="px-5 py-2 neo-btn-primary disabled:opacity-40 text-xs font-black cursor-pointer"
             >
-              {isSubmitting ? 'Posting...' : scheduledFor ? 'Schedule Note' : 'Post Note'}
+              {isSubmitting ? 'Posting...' : scheduledFor ? 'Schedule Note' : 'Broadcast Note'}
             </button>
           </div>
         </div>

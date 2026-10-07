@@ -10,7 +10,8 @@ export type NoteCategory =
   | 'sleep'
   | 'dnd'
   | 'break'
-  | 'custom';
+  | 'custom'
+  | 'other';
 
 export type FollowStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'BLOCKED';
 
@@ -28,7 +29,9 @@ export type AvailabilityCode =
   | 'travelling'
   | 'studying'
   | 'family'
-  | 'offline';
+  | 'offline'
+  | 'other'
+  | 'custom';
 
 export interface UserAvailability {
   code: AvailabilityCode;

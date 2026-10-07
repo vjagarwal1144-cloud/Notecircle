@@ -141,9 +141,28 @@ cryptoKeysRouter.get('/safety-numbers/:otherUserId', (req, res) => {
     numbers.push(chunk.toString().padStart(5, '0'));
   }
 
+  // Real verification state from database (NEVER hardcoded true!)
+  const isVerified = db.isSafetyNumberVerified(viewer.id, otherUserId);
+
   return res.json({
     userIds: [viewer.id, otherUserId],
     safetyNumber: numbers.join(' '),
-    verified: true
+    verified: isVerified
+  });
+});
+
+// POST /api/crypto/safety-numbers/:otherUserId/verify (Mark safety number as verified out-of-band)
+cryptoKeysRouter.post('/safety-numbers/:otherUserId/verify', (req, res) => {
+  const viewer = getAuthUser(req);
+  if (!viewer) return res.status(401).json({ error: 'Unauthorized' });
+
+  const otherUserId = req.params.otherUserId;
+  const { verified = true } = req.body;
+
+  db.setSafetyNumberVerified(viewer.id, otherUserId, !!verified);
+  return res.json({
+    success: true,
+    userId: otherUserId,
+    verified: !!verified
   });
 });

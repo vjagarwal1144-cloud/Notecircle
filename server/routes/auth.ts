@@ -6,10 +6,24 @@ import type { User } from '../../src/types/index.ts';
 export const authRouter = Router();
 
 // Middleware to extract authenticated user & validate active server-side session
+// Supports both HttpOnly Secure Cookie (browser) and Bearer header (REST API / Mobile / CLI)
 export function getAuthUser(req: any): User | null {
+  let token: string | null = null;
   const authHeader = req.headers.authorization;
-  if (!authHeader) return null;
-  const token = authHeader.replace(/^Bearer\s+/, '').trim();
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.replace(/^Bearer\s+/, '').trim();
+  } else if (req.headers.cookie) {
+    const cookies = req.headers.cookie.split(';');
+    for (const c of cookies) {
+      const trimmed = c.trim();
+      if (trimmed.startsWith('nc_session_token=')) {
+        token = decodeURIComponent(trimmed.substring('nc_session_token='.length));
+        break;
+      }
+    }
+  }
+
+  if (!token) return null;
   const userId = parseToken(token);
   if (!userId) return null;
 
@@ -67,6 +81,15 @@ authRouter.post('/login', (req, res) => {
 
   db.createSession(user.id, token, device, ip);
   db.logAudit(user.id, user.username, 'LOGIN_SUCCESS', `Device: ${device}`);
+
+  // Set secure HttpOnly session cookie
+  res.cookie('nc_session_token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 30 * 24 * 60 * 60 * 1000
+  });
 
   return res.json({ token, user });
 });
@@ -161,16 +184,45 @@ authRouter.post('/register', (req, res) => {
   db.createSession(newUser.id, token, device, ip);
   db.logAudit(newUser.id, newUser.username, 'REGISTER_SUCCESS', `New account created: @${newUser.username}`);
 
+  // Set secure HttpOnly session cookie
+  res.cookie('nc_session_token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 30 * 24 * 60 * 60 * 1000
+  });
+
   return res.status(201).json({ token, user: newUser });
 });
 
 // POST /api/auth/logout
 authRouter.post('/logout', (req, res) => {
+  let token: string | null = null;
   const authHeader = req.headers.authorization;
   if (authHeader) {
-    const token = authHeader.replace(/^Bearer\s+/, '').trim();
+    token = authHeader.replace(/^Bearer\s+/, '').trim();
+  } else if (req.headers.cookie) {
+    const cookies = req.headers.cookie.split(';');
+    for (const c of cookies) {
+      const trimmed = c.trim();
+      if (trimmed.startsWith('nc_session_token=')) {
+        token = decodeURIComponent(trimmed.substring('nc_session_token='.length));
+        break;
+      }
+    }
+  }
+
+  if (token) {
     db.deleteSessionByToken(token);
   }
+
+  res.clearCookie('nc_session_token', {
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/'
+  });
+
   return res.json({ success: true, message: 'Logged out successfully' });
 });
 

@@ -92,9 +92,20 @@ async function startServer() {
   const wss = new WebSocketServer({ server, path: '/ws' });
 
   wss.on('connection', (ws: any, req: http.IncomingMessage) => {
-    const url = new URL(req.url || '', `http://${req.headers.host}`);
-    const token = url.searchParams.get('token');
+    const url = new URL(req.url || '', `http://${req.headers.host || '127.0.0.1'}`);
+    let token = url.searchParams.get('token');
     const deviceId = url.searchParams.get('deviceId') || undefined;
+
+    if (!token && req.headers.cookie) {
+      const cookies = req.headers.cookie.split(';');
+      for (const c of cookies) {
+        const trimmed = c.trim();
+        if (trimmed.startsWith('nc_session_token=')) {
+          token = decodeURIComponent(trimmed.substring('nc_session_token='.length));
+          break;
+        }
+      }
+    }
 
     if (!token) {
       ws.close(4001, 'Unauthorized: Token required');

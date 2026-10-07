@@ -45,7 +45,28 @@ export interface DatabaseSchema {
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const DB_FILE = path.resolve(DATA_DIR, 'notecircle.db');
 
-const SERVER_SECRET_KEY = process.env.SESSION_SECRET || 'notecircle_prod_session_secret_p98afy2938fhas98dha9sd8';
+function getOrGenerateSessionSecret(): string {
+  if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.trim().length >= 32) {
+    return process.env.SESSION_SECRET.trim();
+  }
+  const secretFile = path.resolve(DATA_DIR, '.session_secret');
+  try {
+    if (fs.existsSync(secretFile)) {
+      const existing = fs.readFileSync(secretFile, 'utf8').trim();
+      if (existing.length >= 32) return existing;
+    }
+    const fresh = crypto.randomBytes(32).toString('hex');
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(secretFile, fresh, { mode: 0o600 });
+    return fresh;
+  } catch {
+    return crypto.randomBytes(32).toString('hex');
+  }
+}
+
+const SERVER_SECRET_KEY = getOrGenerateSessionSecret();
 
 export function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -329,6 +350,13 @@ class SqlDatabaseManager {
         last_seen TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS verified_safety_numbers (
+        user_id TEXT NOT NULL,
+        contact_id TEXT NOT NULL,
+        verified_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, contact_id)
+      );
+
       CREATE INDEX IF NOT EXISTS idx_users_username ON users (username);
       CREATE INDEX IF NOT EXISTS idx_connections_users ON connections (requester_id, target_id);
       CREATE INDEX IF NOT EXISTS idx_notes_user_status ON notes (user_id, status);
@@ -337,10 +365,17 @@ class SqlDatabaseManager {
       CREATE INDEX IF NOT EXISTS idx_device_keys_user ON device_public_keys (user_id);
       CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions (token);
       CREATE INDEX IF NOT EXISTS idx_recovery_user ON password_recovery_requests (user_id);
+      CREATE INDEX IF NOT EXISTS idx_safety_user ON verified_safety_numbers (user_id);
     `);
   }
 
   private seedInitialIfEmpty(): void {
+    // Separate production database from seed/demo data
+    // In production, do not inject mock personas or default passwords!
+    if (process.env.NODE_ENV === 'production' && process.env.SEED_DEMO_DATA !== 'true') {
+      return;
+    }
+
     const now = new Date();
     const inTwoDays = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
     const inEightHours = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString();
@@ -561,7 +596,7 @@ class SqlDatabaseManager {
         JSON.stringify(u.availability),
         JSON.stringify(u.privacySettings),
         JSON.stringify(u.notificationSettings),
-        hashPassword('password123'),
+        hashPassword(crypto.randomBytes(24).toString('hex')),
         u.createdAt
       );
     }
@@ -1421,10 +1456,39 @@ class SqlDatabaseManager {
     }
   }
 
-  // --- Plans (Signature Feature) ---
+  // --- Plans (Signature Feature with Strict Circle Authorization) ---
   public getPlansForUser(userId: string): any[] {
+    const connections = this.sqlite.prepare(`
+      SELECT target_id as contact_id FROM connections WHERE requester_id = ? AND status = 'ACCEPTED'
+      UNION
+      SELECT requester_id as contact_id FROM connections WHERE target_id = ? AND status = 'ACCEPTED';
+    `).all(userId, userId) as any[];
+    const authorizedCreatorIds = new Set<string>([userId, ...connections.map((c) => c.contact_id)]);
+
     const rows = this.sqlite.prepare('SELECT * FROM plans ORDER BY scheduled_time ASC;').all() as any[];
-    return rows.map((r) => ({
+    return rows
+      .filter((r) => {
+        // Creator themselves, or connected circle member, or user in rsvps
+        if (authorizedCreatorIds.has(r.creator_id)) return true;
+        const rsvps = JSON.parse(r.rsvps || '[]');
+        return rsvps.some((rsvp: any) => rsvp.userId === userId);
+      })
+      .map((r) => ({
+        id: r.id,
+        creatorId: r.creator_id,
+        title: r.title,
+        emoji: r.emoji,
+        scheduledTime: r.scheduled_time,
+        location: r.location,
+        rsvps: JSON.parse(r.rsvps || '[]'),
+        createdAt: r.created_at
+      }));
+  }
+
+  public getPlanById(planId: string): any | null {
+    const r = this.sqlite.prepare('SELECT * FROM plans WHERE id = ?;').get(planId) as any;
+    if (!r) return null;
+    return {
       id: r.id,
       creatorId: r.creator_id,
       title: r.title,
@@ -1433,7 +1497,7 @@ class SqlDatabaseManager {
       location: r.location,
       rsvps: JSON.parse(r.rsvps || '[]'),
       createdAt: r.created_at
-    }));
+    };
   }
 
   public createPlan(plan: { id: string; creatorId: string; title: string; emoji: string; scheduledTime: string; location?: string }): void {
@@ -1443,9 +1507,26 @@ class SqlDatabaseManager {
     `).run(plan.id, plan.creatorId, plan.title, plan.emoji, plan.scheduledTime, plan.location || null, new Date().toISOString());
   }
 
-  public updatePlanRsvp(planId: string, userId: string, username: string, status: 'attending' | 'maybe' | 'declined'): void {
-    const row = this.sqlite.prepare('SELECT rsvps FROM plans WHERE id = ?;').get(planId) as any;
-    if (!row) return;
+  public updatePlanRsvp(planId: string, userId: string, username: string, status: 'attending' | 'maybe' | 'declined'): boolean {
+    const row = this.sqlite.prepare('SELECT * FROM plans WHERE id = ?;').get(planId) as any;
+    if (!row) return false;
+
+    // Authorization check: User must be creator or in creator's accepted circle
+    const isCreator = row.creator_id === userId;
+    let isConnected = false;
+    if (!isCreator) {
+      const conn = this.sqlite.prepare(`
+        SELECT 1 FROM connections 
+        WHERE ((requester_id = ? AND target_id = ?) OR (requester_id = ? AND target_id = ?))
+        AND status = 'ACCEPTED';
+      `).get(userId, row.creator_id, row.creator_id, userId);
+      isConnected = !!conn;
+    }
+
+    if (!isCreator && !isConnected) {
+      return false; // Unauthorized to RSVP to plans outside their circle
+    }
+
     const rsvps = JSON.parse(row.rsvps || '[]');
     const existingIdx = rsvps.findIndex((r: any) => r.userId === userId);
     if (existingIdx >= 0) {
@@ -1455,20 +1536,37 @@ class SqlDatabaseManager {
       rsvps.push({ userId, username, status, updatedAt: new Date().toISOString() });
     }
     this.sqlite.prepare('UPDATE plans SET rsvps = ? WHERE id = ?;').run(JSON.stringify(rsvps), planId);
+    return true;
   }
 
-  // --- Memory Capsules (Signature Feature) ---
+  // --- Memory Capsules (Signature Feature with Zero Content Leakage Prior to Unlock) ---
   public getMemoryCapsules(userId: string): any[] {
+    const connections = this.sqlite.prepare(`
+      SELECT target_id as contact_id FROM connections WHERE requester_id = ? AND status = 'ACCEPTED'
+      UNION
+      SELECT requester_id as contact_id FROM connections WHERE target_id = ? AND status = 'ACCEPTED';
+    `).all(userId, userId) as any[];
+    const circleMemberIds = new Set<string>([userId, ...connections.map((c) => c.contact_id)]);
+
     const rows = this.sqlite.prepare('SELECT * FROM memory_capsules ORDER BY created_at DESC;').all() as any[];
-    return rows.map((r) => ({
-      id: r.id,
-      creatorId: r.creator_id,
-      title: r.title,
-      coverEmoji: r.cover_emoji,
-      unlockAt: r.unlock_at,
-      items: JSON.parse(r.items || '[]'),
-      createdAt: r.created_at
-    }));
+    const now = Date.now();
+
+    return rows
+      .filter((r) => circleMemberIds.has(r.creator_id))
+      .map((r) => {
+        const isLocked = r.unlock_at ? new Date(r.unlock_at).getTime() > now : false;
+        return {
+          id: r.id,
+          creatorId: r.creator_id,
+          title: r.title,
+          coverEmoji: r.cover_emoji,
+          unlockAt: r.unlock_at,
+          isLocked,
+          // CRITICAL ZERO DATA LEAKAGE: contents strictly stripped if capsule is locked!
+          items: isLocked ? [] : JSON.parse(r.items || '[]'),
+          createdAt: r.created_at
+        };
+      });
   }
 
   public createMemoryCapsule(capsule: { id: string; creatorId: string; title: string; coverEmoji: string; unlockAt?: string; items: any[] }): void {
@@ -1476,6 +1574,23 @@ class SqlDatabaseManager {
       INSERT INTO memory_capsules (id, creator_id, title, cover_emoji, unlock_at, items, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?);
     `).run(capsule.id, capsule.creatorId, capsule.title, capsule.coverEmoji, capsule.unlockAt || null, JSON.stringify(capsule.items || []), new Date().toISOString());
+  }
+
+  // --- Out-of-band Safety Numbers Verification State ---
+  public isSafetyNumberVerified(userId: string, contactId: string): boolean {
+    const row = this.sqlite.prepare('SELECT 1 FROM verified_safety_numbers WHERE user_id = ? AND contact_id = ?;').get(userId, contactId);
+    return !!row;
+  }
+
+  public setSafetyNumberVerified(userId: string, contactId: string, verified: boolean): void {
+    if (verified) {
+      this.sqlite.prepare(`
+        INSERT OR REPLACE INTO verified_safety_numbers (user_id, contact_id, verified_at)
+        VALUES (?, ?, ?);
+      `).run(userId, contactId, new Date().toISOString());
+    } else {
+      this.sqlite.prepare('DELETE FROM verified_safety_numbers WHERE user_id = ? AND contact_id = ?;').run(userId, contactId);
+    }
   }
 }
 

@@ -1,89 +1,335 @@
--- NoteCircle Real Production Data Export
--- Generated from data/notecircle.db
+-- NoteCircle Production PostgreSQL Data Migration
+-- Cleaned, validated production export from data/notecircle.db
+-- Strictly restricted to valid users: [usr_1791450678272_b2t31, usr_1791457400815_q27pr]
+-- All orphaned/deleted user references, old sessions, and old OTPs excluded
 
 BEGIN;
 
--- Table: users (2 rows)
-INSERT INTO users (id, username, display_name, email, phone, avatar_url, bio, city, birthday, workplace, is_private, is_admin, is_suspended, availability, privacy_settings, notification_settings, password_hash, created_at) VALUES ('usr_1791450678272_b2t31', 'garg', 'Garg', 'vjagarwal1133@gmail.com', NULL, NULL, NULL, NULL, NULL, NULL, 1, 1, 0, '{"code":"available","label":"Available","emoji":"🟢","strictDnd":false,"updatedAt":"2026-10-08T09:11:18.273Z"}'::jsonb, '{"whoCanMessageMe":"mutual","whoCanSeeOnlineStatus":"connections","whoCanSeeReadReceipts":"connections","whoCanSeeTyping":"connections","whoCanFollowMe":"require_approval","whoCanReply":"connections","whoCanReact":"connections","bioVisibility":"connections","cityVisibility":"connections","birthdayVisibility":"only_me","workplaceVisibility":"connections","followerCountsVisibility":"connections","dndModeStrict":false}'::jsonb, '{"messages":true,"messageRequests":true,"followRequests":true,"acceptedRequests":true,"reactions":true,"replies":true,"noteExpiration":true,"securityAlerts":true}'::jsonb, 'scrypt:v1:b81f89704afa07097019779b13df285a:37b324faeacb2548f8e5d4fe50dfb03cc5634c7380fffefe8dc0ec00e584c9c0', '2026-10-08T09:11:18.273Z') ON CONFLICT DO NOTHING;
-INSERT INTO users (id, username, display_name, email, phone, avatar_url, bio, city, birthday, workplace, is_private, is_admin, is_suspended, availability, privacy_settings, notification_settings, password_hash, created_at) VALUES ('usr_1791457400815_q27pr', 'vijay', 'Shibam', 'vjagarwal1144@gmail.com', NULL, NULL, NULL, NULL, NULL, NULL, 1, 1, 0, '{"code":"available","label":"Available","emoji":"🟢","strictDnd":false,"updatedAt":"2026-10-08T11:03:20.815Z"}'::jsonb, '{"whoCanMessageMe":"mutual","whoCanSeeOnlineStatus":"connections","whoCanSeeReadReceipts":"connections","whoCanSeeTyping":"connections","whoCanFollowMe":"require_approval","whoCanReply":"connections","whoCanReact":"connections","bioVisibility":"connections","cityVisibility":"connections","birthdayVisibility":"only_me","workplaceVisibility":"connections","followerCountsVisibility":"connections","dndModeStrict":false}'::jsonb, '{"messages":true,"messageRequests":true,"followRequests":true,"acceptedRequests":true,"reactions":true,"replies":true,"noteExpiration":true,"securityAlerts":true}'::jsonb, 'scrypt:v1:1f6cd858e38e655f247aa31a42da11b7:3ffa0bc4744f75d7a31aedb5cc10c74ad076462572d990c530828fb300de7067', '2026-10-08T11:03:20.815Z') ON CONFLICT DO NOTHING;
+-- ============================================================================
+-- 1. USERS (2 valid users)
+-- ============================================================================
+INSERT INTO public.users (
+  id, username, display_name, email, phone, avatar_url, bio, city, birthday, workplace,
+  is_private, is_admin, is_suspended, availability, privacy_settings, notification_settings,
+  password_hash, created_at
+) VALUES (
+  'usr_1791450678272_b2t31',
+  'garg',
+  'Garg',
+  'vjagarwal1133@gmail.com',
+  NULL,
+  NULL,
+  '',
+  NULL,
+  NULL,
+  NULL,
+  TRUE,
+  TRUE,
+  FALSE,
+  '{"code":"available","label":"Available","emoji":"🟢","strictDnd":false,"updatedAt":"2026-10-08T09:11:18.273Z"}'::jsonb,
+  '{"whoCanMessageMe":"mutual","whoCanSeeOnlineStatus":"connections","whoCanSeeReadReceipts":"connections","whoCanSeeTyping":"connections","whoCanFollowMe":"require_approval","whoCanReply":"connections","whoCanReact":"connections","bioVisibility":"connections","cityVisibility":"connections","birthdayVisibility":"only_me","workplaceVisibility":"connections","followerCountsVisibility":"connections","dndModeStrict":false}'::jsonb,
+  '{"messages":true,"messageRequests":true,"followRequests":true,"acceptedRequests":true,"reactions":true,"replies":true,"noteExpiration":true,"securityAlerts":true}'::jsonb,
+  'scrypt:v1:b81f89704afa07097019779b13df285a:37b324faeacb2548f8e5d4fe50dfb03cc5634c7380fffefe8dc0ec00e584c9c0',
+  '2026-10-08T09:11:18.273Z'::timestamptz
+) ON CONFLICT (id) DO UPDATE SET
+  password_hash = EXCLUDED.password_hash,
+  display_name = EXCLUDED.display_name,
+  username = EXCLUDED.username,
+  email = EXCLUDED.email,
+  availability = EXCLUDED.availability,
+  privacy_settings = EXCLUDED.privacy_settings,
+  notification_settings = EXCLUDED.notification_settings,
+  created_at = EXCLUDED.created_at;
 
--- Table: conversations (1 rows)
-INSERT INTO conversations (id, type, title, participant_ids, last_message, unread_count, is_muted, is_archived, is_pinned, created_at, updated_at) VALUES ('conv_1791450739186_hic2', 'direct', NULL, '["usr_1791449377037_qt1en","usr_1791450678272_b2t31"]'::jsonb, '{"id":"msg_1791450743374_tc0n","conversationId":"conv_1791450739186_hic2","senderId":"usr_1791449377037_qt1en","senderName":"Vijay","senderAvatar":"https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80","text":"[End-to-End Encrypted Message]","encryptedPayload":"{\"v\":2,\"ephemeralPubKeyJwk\":{\"crv\":\"P-256\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",\"x\":\"VM9ssYZXl3FHQvLFpmPudub6FAExD3yWOK8EqNB0fqc\",\"y\":\"AwtTmEuYiDqHldg0-2_qMt77gbvthbmrtU5aeIYaZPg\"},\"iv\":\"WPzbmBqKPniElJ4u\",\"ct\":\"p9e1m8VXOGDL2rpCoENrw3YDshFu\",\"seq\":1,\"ts\":\"2026-10-08T09:12:23.565Z\",\"algo\":\"ECDH-P256-AES-GCM-256\"}","reactions":[],"status":"SENT","createdAt":"2026-10-08T09:12:23.374Z"}'::jsonb, 0, 0, 0, 0, '2026-10-08T09:12:19.186Z', '2026-10-08T09:12:23.374Z') ON CONFLICT DO NOTHING;
+INSERT INTO public.users (
+  id, username, display_name, email, phone, avatar_url, bio, city, birthday, workplace,
+  is_private, is_admin, is_suspended, availability, privacy_settings, notification_settings,
+  password_hash, created_at
+) VALUES (
+  'usr_1791457400815_q27pr',
+  'vijay',
+  'Shibam',
+  'vjagarwal1144@gmail.com',
+  NULL,
+  NULL,
+  '',
+  NULL,
+  NULL,
+  NULL,
+  TRUE,
+  TRUE,
+  FALSE,
+  '{"code":"available","label":"Available","emoji":"🟢","strictDnd":false,"updatedAt":"2026-10-08T11:03:20.815Z"}'::jsonb,
+  '{"whoCanMessageMe":"mutual","whoCanSeeOnlineStatus":"connections","whoCanSeeReadReceipts":"connections","whoCanSeeTyping":"connections","whoCanFollowMe":"require_approval","whoCanReply":"connections","whoCanReact":"connections","bioVisibility":"connections","cityVisibility":"connections","birthdayVisibility":"only_me","workplaceVisibility":"connections","followerCountsVisibility":"connections","dndModeStrict":false}'::jsonb,
+  '{"messages":true,"messageRequests":true,"followRequests":true,"acceptedRequests":true,"reactions":true,"replies":true,"noteExpiration":true,"securityAlerts":true}'::jsonb,
+  'scrypt:v1:1f6cd858e38e655f247aa31a42da11b7:3ffa0bc4744f75d7a31aedb5cc10c74ad076462572d990c530828fb300de7067',
+  '2026-10-08T11:03:20.815Z'::timestamptz
+) ON CONFLICT (id) DO UPDATE SET
+  password_hash = EXCLUDED.password_hash,
+  display_name = EXCLUDED.display_name,
+  username = EXCLUDED.username,
+  email = EXCLUDED.email,
+  availability = EXCLUDED.availability,
+  privacy_settings = EXCLUDED.privacy_settings,
+  notification_settings = EXCLUDED.notification_settings,
+  created_at = EXCLUDED.created_at;
 
--- Table: messages (1 rows)
-INSERT INTO messages (id, conversation_id, sender_id, sender_name, sender_avatar, text, encrypted_payload, reply_to_id, reply_preview, media_url, reactions, status, is_deleted, deleted_for_me, created_at) VALUES ('msg_1791450743374_tc0n', 'conv_1791450739186_hic2', 'usr_1791449377037_qt1en', 'Vijay', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80', '[End-to-End Encrypted Message]', '{"v":2,"ephemeralPubKeyJwk":{"crv":"P-256","ext":true,"key_ops":[],"kty":"EC","x":"VM9ssYZXl3FHQvLFpmPudub6FAExD3yWOK8EqNB0fqc","y":"AwtTmEuYiDqHldg0-2_qMt77gbvthbmrtU5aeIYaZPg"},"iv":"WPzbmBqKPniElJ4u","ct":"p9e1m8VXOGDL2rpCoENrw3YDshFu","seq":1,"ts":"2026-10-08T09:12:23.565Z","algo":"ECDH-P256-AES-GCM-256"}'::jsonb, NULL, NULL, NULL, '[]'::jsonb, 'READ', 0, 0, '2026-10-08T09:12:23.374Z') ON CONFLICT DO NOTHING;
 
--- Table: notifications (3 rows)
-INSERT INTO notifications (id, recipient_id, sender_id, sender_name, sender_avatar, type, entity_id, text, read, created_at) VALUES ('notif_1791450743376_tqg', 'usr_1791450678272_b2t31', 'usr_1791449377037_qt1en', 'Vijay', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80', 'message', 'conv_1791450739186_hic2', 'Vijay sent you a private message.', 1, '2026-10-08T09:12:23.376Z') ON CONFLICT DO NOTHING;
-INSERT INTO notifications (id, recipient_id, sender_id, sender_name, sender_avatar, type, entity_id, text, read, created_at) VALUES ('notif_1791450723654', 'usr_1791450678272_b2t31', 'usr_1791449377037_qt1en', 'Vijay', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80', 'follow_accept', 'usr_1791449377037_qt1en', 'Vijay accepted your follow request.', 1, '2026-10-08T09:12:03.654Z') ON CONFLICT DO NOTHING;
-INSERT INTO notifications (id, recipient_id, sender_id, sender_name, sender_avatar, type, entity_id, text, read, created_at) VALUES ('notif_1791450696159', 'usr_1791449377037_qt1en', 'usr_1791450678272_b2t31', 'Garg', 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=256&h=256&q=80', 'follow_request', 'usr_1791450678272_b2t31', 'Garg (@garg) requested to follow you.', 1, '2026-10-08T09:11:36.159Z') ON CONFLICT DO NOTHING;
+-- ============================================================================
+-- 2. DEVICE PUBLIC KEYS (4 valid keys for existing users)
+-- ============================================================================
+INSERT INTO public.device_public_keys (
+  id, user_id, device_id, device_name, public_key_jwk, fingerprint, is_revoked, created_at, last_seen
+) VALUES (
+  'devkey_1791455779166_9y61',
+  'usr_1791450678272_b2t31',
+  'dev_1791455779498_xv84',
+  'NoteCircle Web Client',
+  '{"crv":"P-256","ext":true,"key_ops":[],"kty":"EC","x":"45Jis9_p0EY0YDAiIT73IwWIB8qxKN0rt9jhEQQi-1Y","y":"tH-zplT9ddEqZICRhnSNMXdc2ZoAN2epzNq4TfktMJY"}'::jsonb,
+  '68F427069B6DBC6DC0F58FA06C7D2F9F',
+  FALSE,
+  '2026-10-08T10:36:19.166Z'::timestamptz,
+  '2026-10-08T10:40:11.161Z'::timestamptz
+) ON CONFLICT (id) DO NOTHING;
 
--- Table: audit_logs (31 rows)
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791449377085', 'REGISTER_SUCCESS', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T08:49:37.085Z', 'New account created: @vijay') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791449424457', 'LOGIN_SUCCESS', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T08:50:24.457Z', 'Device: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791449519660', 'CRYPTO_DEVICE_KEY_REGISTERED', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T08:51:59.660Z', 'Device: dev_1791377590459_1ube, Fingerprint: 74BC4DCDAEE0BA8EFD833824B94DEB6F') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791450622989', 'CRYPTO_DEVICE_KEY_REGISTERED', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T09:10:22.989Z', 'Device: dev_1791377590459_1ube, Fingerprint: 74BC4DCDAEE0BA8EFD833824B94DEB6F') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791450678320', 'REGISTER_SUCCESS', 'usr_1791450678272_b2t31', 'garg', '2026-10-08T09:11:18.320Z', 'New account created: @garg') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791450689503', 'CRYPTO_DEVICE_KEY_REGISTERED', 'usr_1791450678272_b2t31', 'garg', '2026-10-08T09:11:29.503Z', 'Device: dev_1791450689718_2361, Fingerprint: B86770C189B690999C8392F89ABC8A92') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791450715271', 'LOGIN_SUCCESS', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T09:11:55.271Z', 'Device: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791450721043', 'CRYPTO_DEVICE_KEY_REGISTERED', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T09:12:01.043Z', 'Device: dev_1791450721269_5sc8, Fingerprint: DA65F826E18C63715D27AC180830E971') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791450725846', 'CRYPTO_DEVICE_KEY_REGISTERED', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T09:12:05.846Z', 'Device: dev_1791450721269_5sc8, Fingerprint: DA65F826E18C63715D27AC180830E971') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791450739212', 'CRYPTO_DEVICE_KEY_REGISTERED', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T09:12:19.212Z', 'Device: dev_1791450721269_5sc8, Fingerprint: DA65F826E18C63715D27AC180830E971') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791450757553', 'LOGIN_SUCCESS', 'usr_1791450678272_b2t31', 'garg', '2026-10-08T09:12:37.553Z', 'Device: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791450757873', 'CRYPTO_DEVICE_KEY_REGISTERED', 'usr_1791450678272_b2t31', 'garg', '2026-10-08T09:12:37.873Z', 'Device: dev_1791450758102_opgm, Fingerprint: 7BE20404F173198D6B0BFEE6A0203660') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791450846087', 'LOGIN_SUCCESS', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T09:14:06.087Z', 'Device: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791450848176', 'CRYPTO_DEVICE_KEY_REGISTERED', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T09:14:08.176Z', 'Device: dev_1791450758102_opgm, Fingerprint: 7BE20404F173198D6B0BFEE6A0203660') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791451327062', 'LOGIN_SUCCESS', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T09:22:07.062Z', 'Device: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791451395642', 'LOGIN_SUCCESS', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T09:23:15.642Z', 'Device: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791451605031', 'CRYPTO_DEVICE_KEY_REGISTERED', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T09:26:45.031Z', 'Device: dev_1791450758102_opgm, Fingerprint: 7BE20404F173198D6B0BFEE6A0203660') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791451682597', 'LOGIN_SUCCESS', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T09:28:02.597Z', 'Device: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791453024838', 'LOGIN_SUCCESS', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T09:50:24.838Z', 'Device: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791453221776', 'LOGIN_SUCCESS', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T09:53:41.776Z', 'Device: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791453346697', 'LOGIN_SUCCESS', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T09:55:46.697Z', 'Device: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791454060337', 'LOGIN_SUCCESS', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T10:07:40.337Z', 'Device: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791454580180', 'LOGIN_SUCCESS', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T10:16:20.180Z', 'Device: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791454616132', 'ACCOUNT_DELETED', 'usr_1791449377037_qt1en', 'vijay', '2026-10-08T10:16:56.132Z', 'User account permanently purged from NoteCircle') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791455775872', 'LOGIN_SUCCESS', 'usr_1791450678272_b2t31', 'garg', '2026-10-08T10:36:15.872Z', 'Device: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791455779166', 'CRYPTO_DEVICE_KEY_REGISTERED', 'usr_1791450678272_b2t31', 'garg', '2026-10-08T10:36:19.166Z', 'Device: dev_1791455779498_xv84, Fingerprint: 68F427069B6DBC6DC0F58FA06C7D2F9F') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791456011162', 'CRYPTO_DEVICE_KEY_REGISTERED', 'usr_1791450678272_b2t31', 'garg', '2026-10-08T10:40:11.162Z', 'Device: dev_1791455779498_xv84, Fingerprint: 68F427069B6DBC6DC0F58FA06C7D2F9F') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791456948998', 'AVATAR_UPLOADED', 'usr_1791450678272_b2t31', 'garg', '2026-10-08T10:55:48.998Z', 'New avatar saved: /uploads/avatars/avatar_usr_1791450678272_b2t31_1791456948996_6e764a.png') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791456949014', 'AVATAR_REMOVED', 'usr_1791450678272_b2t31', 'garg', '2026-10-08T10:55:49.014Z', 'Removed custom profile photo') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791457400887', 'REGISTER_EMAIL_VERIFIED', 'usr_1791457400815_q27pr', 'vijay', '2026-10-08T11:03:20.887Z', 'Activated with email: vjagarwal1144@gmail.com') ON CONFLICT DO NOTHING;
-INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details) VALUES ('audit_1791457652199', 'CRYPTO_DEVICE_KEY_REGISTERED', 'usr_1791457400815_q27pr', 'vijay', '2026-10-08T11:07:32.199Z', 'Device: dev_1791455779498_xv84, Fingerprint: 68F427069B6DBC6DC0F58FA06C7D2F9F') ON CONFLICT DO NOTHING;
+INSERT INTO public.device_public_keys (
+  id, user_id, device_id, device_name, public_key_jwk, fingerprint, is_revoked, created_at, last_seen
+) VALUES (
+  'devkey_1791450757873_ndul',
+  'usr_1791450678272_b2t31',
+  'dev_1791450758102_opgm',
+  'NoteCircle Web Client',
+  '{"crv":"P-256","ext":true,"key_ops":[],"kty":"EC","x":"7D_lbgxj12HzyPlHOW9u0AzOZxmK1vsXDNSLXlb0icU","y":"arqKrY_zFBRYCMpIynVJmnRWUdXXtK2Usn3R8vUwy9A"}'::jsonb,
+  '7BE20404F173198D6B0BFEE6A0203660',
+  FALSE,
+  '2026-10-08T09:12:37.872Z'::timestamptz,
+  '2026-10-08T09:12:37.872Z'::timestamptz
+) ON CONFLICT (id) DO NOTHING;
 
--- Table: sessions (4 rows)
-INSERT INTO sessions (id, user_id, token, device, ip, created_at, last_active) VALUES ('sess_1791450757553_63550213', 'usr_1791450678272_b2t31', 'dXNyXzE3OTE0NTA2NzgyNzJfYjJ0MzE6MTc5MTQ1MDc1NzU1MjozNzdmMDdmMjBiYWNjMzM0Yjk2YTNjNWY0MmJiNjEyMzo5MmY5NTgzMjMyNTQyYWE5MGQ3NDFkNDU1YzM1MjMyNzFkZjAxM2YxMzg5YzI5Y2FhZjg0MGY3ZTRmNjIyODQx', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537', '127.0.0.1', '2026-10-08T09:12:37.553Z', '2026-10-08T09:13:57.975Z') ON CONFLICT DO NOTHING;
-INSERT INTO sessions (id, user_id, token, device, ip, created_at, last_active) VALUES ('sess_1791455775871_c3051154', 'usr_1791450678272_b2t31', 'dXNyXzE3OTE0NTA2NzgyNzJfYjJ0MzE6MTc5MTQ1NTc3NTg3MTo3MzZkODNjYmI3ZDEzNWRkNjFmNWE3ZDM0OTJlNTEyYjoxMGU2M2RiMjBlNDdhODc0MTM4MjM0ZGE5MDBiNDg4OGJkOWMyM2U1MzRhMDQ0M2VmY2IxMmQ5ZDU0NTQ5NDVh', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537', '127.0.0.1', '2026-10-08T10:36:15.871Z', '2026-10-08T10:56:31.871Z') ON CONFLICT DO NOTHING;
-INSERT INTO sessions (id, user_id, token, device, ip, created_at, last_active) VALUES ('sess_1791456948880_753d166d', 'usr_1791450678272_b2t31', 'dXNyXzE3OTE0NTA2NzgyNzJfYjJ0MzE6MTc5MTQ1Njk0ODg3ODoxMGEwNjZkYTBjYTM1NDJjMDMyMTBmZTI3MDRlZjYyYjozZGYzMDM1ZDU5OTVlZGNhYjJlYmViZmZlNjlkZGUwM2JkNmEyMWVlMzc4M2YwOTdmZTdlMjU1YWJlNDQzMDVm', 'Test Device', '127.0.0.1', '2026-10-08T10:55:48.880Z', '2026-10-08T10:55:49.013Z') ON CONFLICT DO NOTHING;
-INSERT INTO sessions (id, user_id, token, device, ip, created_at, last_active) VALUES ('sess_1791457400886_bbb444b4', 'usr_1791457400815_q27pr', 'dXNyXzE3OTE0NTc0MDA4MTVfcTI3cHI6MTc5MTQ1NzQwMDg4NjplZjYxYTk3NGZlNmQ0ZWZkY2Y3NjkwOTY0YmFhNjY3Zjo4OGE2YjhmMWY3MTY0NmFjZGUyOWUxZjhjMDM3MWEzM2VhMjhmNDQ5NGU2MzA2YWNhMzgwMTNjOThhYzQxNWQ2', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537', '127.0.0.1', '2026-10-08T11:03:20.887Z', '2026-10-08T11:11:36.619Z') ON CONFLICT DO NOTHING;
+INSERT INTO public.device_public_keys (
+  id, user_id, device_id, device_name, public_key_jwk, fingerprint, is_revoked, created_at, last_seen
+) VALUES (
+  'devkey_1791450689503_xa5e',
+  'usr_1791450678272_b2t31',
+  'dev_1791450689718_2361',
+  'NoteCircle Web Client',
+  '{"crv":"P-256","ext":true,"key_ops":[],"kty":"EC","x":"AjqhmDnUfeKhJ3VLE8aFSawAlALdu9atG631Fy09Pnc","y":"AHSN-hY1-F6_u_s2x0J7AMkx6AG_ahSn5X1HN05Iq9U"}'::jsonb,
+  'B86770C189B690999C8392F89ABC8A92',
+  FALSE,
+  '2026-10-08T09:11:29.503Z'::timestamptz,
+  '2026-10-08T09:11:29.503Z'::timestamptz
+) ON CONFLICT (id) DO NOTHING;
 
--- Table: plans (1 rows)
-INSERT INTO plans (id, creator_id, title, emoji, scheduled_time, location, rsvps, created_at) VALUES ('plan_1791450899136_j25b', 'usr_1791449377037_qt1en', 'Garf', '📅', 'Vef', 'Hdh', '[{"userId":"usr_1791449377037_qt1en","username":"Vijay","status":"attending","updatedAt":"2026-10-08T09:14:59.136Z"}]'::jsonb, '2026-10-08T09:14:59.136Z') ON CONFLICT DO NOTHING;
+INSERT INTO public.device_public_keys (
+  id, user_id, device_id, device_name, public_key_jwk, fingerprint, is_revoked, created_at, last_seen
+) VALUES (
+  'devkey_1791457652199_x13n',
+  'usr_1791457400815_q27pr',
+  'dev_1791455779498_xv84',
+  'NoteCircle Web Client',
+  '{"crv":"P-256","ext":true,"key_ops":[],"kty":"EC","x":"45Jis9_p0EY0YDAiIT73IwWIB8qxKN0rt9jhEQQi-1Y","y":"tH-zplT9ddEqZICRhnSNMXdc2ZoAN2epzNq4TfktMJY"}'::jsonb,
+  '68F427069B6DBC6DC0F58FA06C7D2F9F',
+  FALSE,
+  '2026-10-08T11:07:32.199Z'::timestamptz,
+  '2026-10-08T11:07:32.199Z'::timestamptz
+) ON CONFLICT (id) DO NOTHING;
 
--- Table: device_public_keys (4 rows)
-INSERT INTO device_public_keys (id, user_id, device_id, device_name, public_key_jwk, fingerprint, is_revoked, created_at, last_seen) VALUES ('devkey_1791455779166_9y61', 'usr_1791450678272_b2t31', 'dev_1791455779498_xv84', 'NoteCircle Web Client', '{"crv":"P-256","ext":true,"key_ops":[],"kty":"EC","x":"45Jis9_p0EY0YDAiIT73IwWIB8qxKN0rt9jhEQQi-1Y","y":"tH-zplT9ddEqZICRhnSNMXdc2ZoAN2epzNq4TfktMJY"}'::jsonb, '68F427069B6DBC6DC0F58FA06C7D2F9F', 0, '2026-10-08T10:36:19.166Z', '2026-10-08T10:40:11.161Z') ON CONFLICT DO NOTHING;
-INSERT INTO device_public_keys (id, user_id, device_id, device_name, public_key_jwk, fingerprint, is_revoked, created_at, last_seen) VALUES ('devkey_1791450757873_ndul', 'usr_1791450678272_b2t31', 'dev_1791450758102_opgm', 'NoteCircle Web Client', '{"crv":"P-256","ext":true,"key_ops":[],"kty":"EC","x":"7D_lbgxj12HzyPlHOW9u0AzOZxmK1vsXDNSLXlb0icU","y":"arqKrY_zFBRYCMpIynVJmnRWUdXXtK2Usn3R8vUwy9A"}'::jsonb, '7BE20404F173198D6B0BFEE6A0203660', 0, '2026-10-08T09:12:37.872Z', '2026-10-08T09:12:37.872Z') ON CONFLICT DO NOTHING;
-INSERT INTO device_public_keys (id, user_id, device_id, device_name, public_key_jwk, fingerprint, is_revoked, created_at, last_seen) VALUES ('devkey_1791450689503_xa5e', 'usr_1791450678272_b2t31', 'dev_1791450689718_2361', 'NoteCircle Web Client', '{"crv":"P-256","ext":true,"key_ops":[],"kty":"EC","x":"AjqhmDnUfeKhJ3VLE8aFSawAlALdu9atG631Fy09Pnc","y":"AHSN-hY1-F6_u_s2x0J7AMkx6AG_ahSn5X1HN05Iq9U"}'::jsonb, 'B86770C189B690999C8392F89ABC8A92', 0, '2026-10-08T09:11:29.503Z', '2026-10-08T09:11:29.503Z') ON CONFLICT DO NOTHING;
-INSERT INTO device_public_keys (id, user_id, device_id, device_name, public_key_jwk, fingerprint, is_revoked, created_at, last_seen) VALUES ('devkey_1791457652199_x13n', 'usr_1791457400815_q27pr', 'dev_1791455779498_xv84', 'NoteCircle Web Client', '{"crv":"P-256","ext":true,"key_ops":[],"kty":"EC","x":"45Jis9_p0EY0YDAiIT73IwWIB8qxKN0rt9jhEQQi-1Y","y":"tH-zplT9ddEqZICRhnSNMXdc2ZoAN2epzNq4TfktMJY"}'::jsonb, '68F427069B6DBC6DC0F58FA06C7D2F9F', 0, '2026-10-08T11:07:32.199Z', '2026-10-08T11:07:32.199Z') ON CONFLICT DO NOTHING;
 
--- Table: registration_otps (5 rows)
-INSERT INTO registration_otps (id, email, otp_hash, expires_at, attempts, max_attempts, resend_available_at, verified, verification_token_hash, used, created_at) VALUES ('otp_1791454470016_507237b2', 'testuser999@example.com', '388bd61ef552742fafc84c423f69721efe82c531be50d17cf3c96383ea89f700', '2026-10-08T10:24:30.016Z', 0, 5, '2026-10-08T10:15:30.016Z', 0, NULL, 0, '2026-10-08T10:14:30.016Z') ON CONFLICT DO NOTHING;
-INSERT INTO registration_otps (id, email, otp_hash, expires_at, attempts, max_attempts, resend_available_at, verified, verification_token_hash, used, created_at) VALUES ('otp_1791454640722_156fc830', 'vjagarwal1144@gmail.com', '88ffe58c92129342e26419b274fc45fee0344332e9f2f4b0eca29844c17dd4a8', '2026-10-08T10:27:20.722Z', 0, 5, '2026-10-08T10:18:20.722Z', 0, NULL, 1, '2026-10-08T10:17:20.722Z') ON CONFLICT DO NOTHING;
-INSERT INTO registration_otps (id, email, otp_hash, expires_at, attempts, max_attempts, resend_available_at, verified, verification_token_hash, used, created_at) VALUES ('otp_1791454718278_1b80d088', 'vjagarwal1144@gmail.com', 'e035ad6c67c78f148b24d723d75de5fe0e95571ad66b13bbae4aba9ed61d7260', '2026-10-08T10:28:38.278Z', 0, 5, '2026-10-08T10:19:38.278Z', 0, NULL, 1, '2026-10-08T10:18:38.278Z') ON CONFLICT DO NOTHING;
-INSERT INTO registration_otps (id, email, otp_hash, expires_at, attempts, max_attempts, resend_available_at, verified, verification_token_hash, used, created_at) VALUES ('otp_1791454985701_8d37180c', 'vjagarwal1144@gmail.com', '2ededc65e28e725002fe6ac9dfe4b7dc090a3aa3d316477a552dc11e77b413fb', '2026-10-08T10:33:05.701Z', 0, 5, '2026-10-08T10:24:05.701Z', 0, NULL, 1, '2026-10-08T10:23:05.701Z') ON CONFLICT DO NOTHING;
-INSERT INTO registration_otps (id, email, otp_hash, expires_at, attempts, max_attempts, resend_available_at, verified, verification_token_hash, used, created_at) VALUES ('otp_1791457303438_96e1700b', 'vjagarwal1144@gmail.com', 'd93e7366b1d70266ead68148c739cdf479243d2283f99f0a8f91357187cbd199', '2026-10-08T11:11:43.438Z', 1, 5, '2026-10-08T11:02:43.438Z', 1, '3ea999e28c14e988f42a586765454dbe56c368149e091321fde8860e3000150b', 1, '2026-10-08T11:01:43.438Z') ON CONFLICT DO NOTHING;
+-- ============================================================================
+-- 3. AUDIT LOGS (12 legitimate security & activity logs for valid users)
+-- ============================================================================
+INSERT INTO public.audit_logs (
+  id, action, actor_id, actor_username, timestamp, details
+) VALUES (
+  'audit_1791450678320',
+  'REGISTER_SUCCESS',
+  'usr_1791450678272_b2t31',
+  'garg',
+  '2026-10-08T09:11:18.320Z'::timestamptz,
+  'New account created: @garg'
+) ON CONFLICT (id) DO NOTHING;
 
--- Table: email_logs (11 rows)
-INSERT INTO email_logs (id, recipient, type, status, provider, error, created_at) VALUES ('elog_1791454470017_f5e7533f', 'testuser999@example.com', 'REGISTRATION_OTP', 'BLOCKED_CREDENTIALS_REQUIRED', 'smtp', 'SMTP credentials not configured in environment (Requires SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, or RESEND_API_KEY)', '2026-10-08T10:14:30.017Z') ON CONFLICT DO NOTHING;
-INSERT INTO email_logs (id, recipient, type, status, provider, error, created_at) VALUES ('elog_1791454640722_f8654b72', 'vjagarwal1144@gmail.com', 'REGISTRATION_OTP', 'BLOCKED_CREDENTIALS_REQUIRED', 'smtp', 'SMTP credentials not configured in environment (Requires SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, or RESEND_API_KEY)', '2026-10-08T10:17:20.722Z') ON CONFLICT DO NOTHING;
-INSERT INTO email_logs (id, recipient, type, status, provider, error, created_at) VALUES ('elog_1791454718278_588ea9b0', 'vjagarwal1144@gmail.com', 'REGISTRATION_OTP', 'BLOCKED_CREDENTIALS_REQUIRED', 'smtp', 'SMTP credentials not configured in environment (Requires SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, or RESEND_API_KEY)', '2026-10-08T10:18:38.278Z') ON CONFLICT DO NOTHING;
-INSERT INTO email_logs (id, recipient, type, status, provider, error, created_at) VALUES ('elog_1791454985701_f913dc7e', 'vjagarwal1144@gmail.com', 'REGISTRATION_OTP', 'BLOCKED_CREDENTIALS_REQUIRED', 'smtp', 'SMTP credentials not configured in environment (Requires SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, or RESEND_API_KEY)', '2026-10-08T10:23:05.701Z') ON CONFLICT DO NOTHING;
-INSERT INTO email_logs (id, recipient, type, status, provider, error, created_at) VALUES ('elog_1791456917003_e7960737', 'vjagarwal1133@gmail.com', 'TEST_EMAIL', 'FAILED', 'resend', 'You can only send testing emails to your own email address (vjagarwal1144@gmail.com). To send emails to other recipients, please verify a domain at resend.com/domains, and change the `from` address to an email using this domain.', '2026-10-08T10:55:17.003Z') ON CONFLICT DO NOTHING;
-INSERT INTO email_logs (id, recipient, type, status, provider, error, created_at) VALUES ('elog_1791456926530_dee09842', 'vjagarwal1144@gmail.com', 'TEST_EMAIL', 'SENT', 'resend', NULL, '2026-10-08T10:55:26.530Z') ON CONFLICT DO NOTHING;
-INSERT INTO email_logs (id, recipient, type, status, provider, error, created_at) VALUES ('elog_1791456938978_7b7812ab', 'random123@example.com', 'REGISTRATION_OTP', 'FAILED', 'resend', 'Invalid `to` field. Please use our testing email address instead of domains like `example.com`. See our documentation for more information.', '2026-10-08T10:55:38.978Z') ON CONFLICT DO NOTHING;
-INSERT INTO email_logs (id, recipient, type, status, provider, error, created_at) VALUES ('elog_1791457101606_50ca2cff', 'vjagarwal1144@gmail.com', 'REGISTRATION_OTP', 'FAILED', 'resend', 'Invalid `from` field. The email address needs to follow the `email@example.com` or `Name <email@example.com>` format.', '2026-10-08T10:58:21.606Z') ON CONFLICT DO NOTHING;
-INSERT INTO email_logs (id, recipient, type, status, provider, error, created_at) VALUES ('elog_1791457303821_b1ee2883', 'vjagarwal1144@gmail.com', 'REGISTRATION_OTP', 'SENT', 'resend', NULL, '2026-10-08T11:01:43.821Z') ON CONFLICT DO NOTHING;
-INSERT INTO email_logs (id, recipient, type, status, provider, error, created_at) VALUES ('elog_1791457401255_09c9321c', 'vjagarwal1133@gmail.com', 'ADMIN_NEW_USER', 'FAILED', 'resend', 'You can only send testing emails to your own email address (vjagarwal1144@gmail.com). To send emails to other recipients, please verify a domain at resend.com/domains, and change the `from` address to an email using this domain.', '2026-10-08T11:03:21.255Z') ON CONFLICT DO NOTHING;
-INSERT INTO email_logs (id, recipient, type, status, provider, error, created_at) VALUES ('elog_1791457401257_8d0b47d3', 'vjagarwal1144@gmail.com', 'WELCOME_EMAIL', 'SENT', 'resend', NULL, '2026-10-08T11:03:21.258Z') ON CONFLICT DO NOTHING;
+INSERT INTO public.audit_logs (
+  id, action, actor_id, actor_username, timestamp, details
+) VALUES (
+  'audit_1791450689503',
+  'CRYPTO_DEVICE_KEY_REGISTERED',
+  'usr_1791450678272_b2t31',
+  'garg',
+  '2026-10-08T09:11:29.503Z'::timestamptz,
+  'Device: dev_1791450689718_2361, Fingerprint: B86770C189B690999C8392F89ABC8A92'
+) ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.audit_logs (
+  id, action, actor_id, actor_username, timestamp, details
+) VALUES (
+  'audit_1791450757553',
+  'LOGIN_SUCCESS',
+  'usr_1791450678272_b2t31',
+  'garg',
+  '2026-10-08T09:12:37.553Z'::timestamptz,
+  'Device: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537'
+) ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.audit_logs (
+  id, action, actor_id, actor_username, timestamp, details
+) VALUES (
+  'audit_1791450757873',
+  'CRYPTO_DEVICE_KEY_REGISTERED',
+  'usr_1791450678272_b2t31',
+  'garg',
+  '2026-10-08T09:12:37.873Z'::timestamptz,
+  'Device: dev_1791450758102_opgm, Fingerprint: 7BE20404F173198D6B0BFEE6A0203660'
+) ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.audit_logs (
+  id, action, actor_id, actor_username, timestamp, details
+) VALUES (
+  'audit_1791455775872',
+  'LOGIN_SUCCESS',
+  'usr_1791450678272_b2t31',
+  'garg',
+  '2026-10-08T10:36:15.872Z'::timestamptz,
+  'Device: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537'
+) ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.audit_logs (
+  id, action, actor_id, actor_username, timestamp, details
+) VALUES (
+  'audit_1791455779166',
+  'CRYPTO_DEVICE_KEY_REGISTERED',
+  'usr_1791450678272_b2t31',
+  'garg',
+  '2026-10-08T10:36:19.166Z'::timestamptz,
+  'Device: dev_1791455779498_xv84, Fingerprint: 68F427069B6DBC6DC0F58FA06C7D2F9F'
+) ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.audit_logs (
+  id, action, actor_id, actor_username, timestamp, details
+) VALUES (
+  'audit_1791456011162',
+  'CRYPTO_DEVICE_KEY_REGISTERED',
+  'usr_1791450678272_b2t31',
+  'garg',
+  '2026-10-08T10:40:11.162Z'::timestamptz,
+  'Device: dev_1791455779498_xv84, Fingerprint: 68F427069B6DBC6DC0F58FA06C7D2F9F'
+) ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.audit_logs (
+  id, action, actor_id, actor_username, timestamp, details
+) VALUES (
+  'audit_1791456948998',
+  'AVATAR_UPLOADED',
+  'usr_1791450678272_b2t31',
+  'garg',
+  '2026-10-08T10:55:48.998Z'::timestamptz,
+  'New avatar saved: /uploads/avatars/avatar_usr_1791450678272_b2t31_1791456948996_6e764a.png'
+) ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.audit_logs (
+  id, action, actor_id, actor_username, timestamp, details
+) VALUES (
+  'audit_1791456949014',
+  'AVATAR_REMOVED',
+  'usr_1791450678272_b2t31',
+  'garg',
+  '2026-10-08T10:55:49.014Z'::timestamptz,
+  'Removed custom profile photo'
+) ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.audit_logs (
+  id, action, actor_id, actor_username, timestamp, details
+) VALUES (
+  'audit_1791457400887',
+  'REGISTER_EMAIL_VERIFIED',
+  'usr_1791457400815_q27pr',
+  'vijay',
+  '2026-10-08T11:03:20.887Z'::timestamptz,
+  'Activated with email: vjagarwal1144@gmail.com'
+) ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.audit_logs (
+  id, action, actor_id, actor_username, timestamp, details
+) VALUES (
+  'audit_1791457652199',
+  'CRYPTO_DEVICE_KEY_REGISTERED',
+  'usr_1791457400815_q27pr',
+  'vijay',
+  '2026-10-08T11:07:32.199Z'::timestamptz,
+  'Device: dev_1791455779498_xv84, Fingerprint: 68F427069B6DBC6DC0F58FA06C7D2F9F'
+) ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.audit_logs (
+  id, action, actor_id, actor_username, timestamp, details
+) VALUES (
+  'audit_1791461872426',
+  'LOGIN_SUCCESS',
+  'usr_1791457400815_q27pr',
+  'vijay',
+  '2026-10-08T12:17:52.426Z'::timestamptz,
+  'Device: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537'
+) ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 4. EMAIL LOGS (2 verified production transaction logs)
+-- ============================================================================
+INSERT INTO public.email_logs (
+  id, recipient, type, status, provider, error, created_at
+) VALUES (
+  'elog_1791457303821_b1ee2883',
+  'vjagarwal1144@gmail.com',
+  'REGISTRATION_OTP',
+  'SENT',
+  'resend',
+  NULL,
+  '2026-10-08T11:01:43.821Z'::timestamptz
+) ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.email_logs (
+  id, recipient, type, status, provider, error, created_at
+) VALUES (
+  'elog_1791457401257_8d0b47d3',
+  'vjagarwal1144@gmail.com',
+  'WELCOME_EMAIL',
+  'SENT',
+  'resend',
+  NULL,
+  '2026-10-08T11:03:21.258Z'::timestamptz
+) ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 5. PRE-COMMIT VALIDATION & FOREIGN KEY INTEGRITY CHECKS
+-- ============================================================================
+DO $$
+DECLARE
+  v_user_count INT;
+  v_device_keys_count INT;
+  v_audit_logs_count INT;
+  v_orphaned_keys INT;
+BEGIN
+  -- Count validation
+  SELECT COUNT(*) INTO v_user_count FROM public.users;
+  SELECT COUNT(*) INTO v_device_keys_count FROM public.device_public_keys;
+  SELECT COUNT(*) INTO v_audit_logs_count FROM public.audit_logs;
+
+  RAISE NOTICE 'Validation: users=%, device_keys=%, audit_logs=%', v_user_count, v_device_keys_count, v_audit_logs_count;
+
+  -- FK Check: Device public keys must point to an existing user
+  SELECT COUNT(*) INTO v_orphaned_keys
+  FROM public.device_public_keys k
+  WHERE NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = k.user_id);
+
+  IF v_orphaned_keys > 0 THEN
+    RAISE EXCEPTION 'FK Integrity Failure: % device_public_keys have orphaned user_id', v_orphaned_keys;
+  END IF;
+
+  IF v_user_count < 2 THEN
+    RAISE EXCEPTION 'Validation Failure: Expected at least 2 users, found %', v_user_count;
+  END IF;
+
+  RAISE NOTICE 'Pre-commit integrity checks passed successfully.';
+END $$;
 
 COMMIT;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Lock, 
   MapPin, 
@@ -11,7 +11,9 @@ import {
   UserCheck, 
   Clock, 
   Sparkles,
-  Users
+  Users,
+  Camera,
+  Trash2
 } from 'lucide-react';
 import { api } from '../services/api.ts';
 import { useAuth } from '../context/AuthContext.tsx';
@@ -48,6 +50,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Native Photo/Gallery selection states
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingPhotoDataUrl, setPendingPhotoDataUrl] = useState<string | null>(null);
+  const [photoRemoved, setPhotoRemoved] = useState<boolean>(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
   const fetchProfile = async () => {
     setIsLoading(true);
     try {
@@ -61,6 +69,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         setEditCity(res.profile.city || '');
         setEditWorkplace(res.profile.workplace || '');
         setEditBirthday(res.profile.birthday || '');
+        setPendingPhotoDataUrl(null);
+        setPhotoRemoved(false);
+        setPhotoError(null);
       }
     } catch (err) {
       console.error('Failed to load profile:', err);
@@ -73,15 +84,63 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     fetchProfile();
   }, [targetUsername, currentUser]);
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoError(null);
+
+    const validMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+    if (!validMimes.includes(file.type.toLowerCase())) {
+      setPhotoError('Unsupported format. Please select a JPG, PNG, WEBP, or GIF image.');
+      return;
+    }
+
+    // 5MB limit
+    if (file.size > 5 * 1024 * 1024) {
+      setPhotoError('Image exceeds the 5MB size limit. Please choose a smaller photo.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setPendingPhotoDataUrl(reader.result);
+        setPhotoRemoved(false);
+      }
+    };
+    reader.onerror = () => {
+      setPhotoError('Could not read the selected image file. Please retry.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemovePhoto = () => {
+    setPendingPhotoDataUrl(null);
+    setPhotoRemoved(true);
+    setPhotoError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     setNotice(null);
     try {
+      let finalAvatarUrl = editAvatarUrl;
+
+      // Handle photo upload/removal first
+      if (photoRemoved) {
+        await api.removeAvatar();
+        finalAvatarUrl = '';
+      } else if (pendingPhotoDataUrl) {
+        const uploadRes = await api.uploadAvatar(pendingPhotoDataUrl);
+        finalAvatarUrl = uploadRes.avatarUrl;
+      }
+
       await api.updateProfile({
         displayName: editName,
         username: editUsername,
-        avatarUrl: editAvatarUrl,
+        avatarUrl: finalAvatarUrl,
         bio: editBio,
         city: editCity,
         workplace: editWorkplace,
@@ -368,24 +427,73 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               </button>
             </div>
 
-            {/* Avatar Selector */}
+            {/* Native Gallery Profile Photo Selector */}
             <div>
               <label className="text-xs font-black uppercase tracking-wider text-stone-950 dark:text-stone-300 block mb-1.5 font-display">
-                Avatar Photo
+                Profile Photo
               </label>
-              <div className="flex items-center gap-3">
-                <img
-                  src={editAvatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80'}
-                  alt="Avatar preview"
-                  className="w-12 h-12 rounded-full border-2 border-stone-950 object-cover shadow-[2px_2px_0px_#121217]"
-                />
-                <input
-                  type="url"
-                  value={editAvatarUrl}
-                  onChange={(e) => setEditAvatarUrl(e.target.value)}
-                  placeholder="Paste image URL (https://...)"
-                  className="flex-1 text-xs font-bold p-2.5 neo-input text-stone-950 dark:text-stone-100"
-                />
+              <div className="flex flex-col sm:flex-row items-center gap-4 p-3.5 rounded-2xl bg-[#FAF7F0] dark:bg-stone-900 border-2.5 border-stone-950 dark:border-stone-800 shadow-[2px_2px_0px_#121217]">
+                <div className="relative shrink-0">
+                  {pendingPhotoDataUrl ? (
+                    <img
+                      src={pendingPhotoDataUrl}
+                      alt="New avatar preview"
+                      className="w-16 h-16 rounded-full border-2.5 border-stone-950 object-cover shadow-[2px_2px_0px_#121217]"
+                    />
+                  ) : !photoRemoved && editAvatarUrl ? (
+                    <img
+                      src={editAvatarUrl}
+                      alt="Current avatar"
+                      className="w-16 h-16 rounded-full border-2.5 border-stone-950 object-cover shadow-[2px_2px_0px_#121217]"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-amber-300 dark:bg-amber-400 text-stone-950 border-2.5 border-stone-950 flex items-center justify-center font-black text-xl shadow-[2px_2px_0px_#121217]">
+                      {(editName || 'U').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 space-y-2 text-center sm:text-left min-w-0">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="hidden"
+                    onChange={handleFileSelect}
+                  />
+
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-3.5 py-1.5 neo-btn bg-white dark:bg-stone-800 text-stone-950 dark:text-stone-100 text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#121217]"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Choose from Gallery</span>
+                    </button>
+
+                    {(pendingPhotoDataUrl || (!photoRemoved && editAvatarUrl)) && (
+                      <button
+                        type="button"
+                        onClick={handleRemovePhoto}
+                        className="px-3 py-1.5 rounded-xl border-2 border-rose-600 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs font-black flex items-center gap-1 shadow-[1.5px_1.5px_0px_#E11D48] hover:bg-rose-100 dark:hover:bg-rose-900/60 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Remove Photo</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] font-bold text-stone-600 dark:text-stone-400">
+                    Select a photo from your gallery (JPG, PNG, WEBP, GIF up to 5MB).
+                  </p>
+
+                  {photoError && (
+                    <p className="text-[11px] font-black text-rose-600 dark:text-rose-400">
+                      {photoError}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 

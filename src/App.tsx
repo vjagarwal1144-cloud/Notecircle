@@ -110,7 +110,7 @@ function MainApp() {
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-[#FFFDF9] dark:bg-[#0E0E14] text-stone-950 dark:text-stone-50 flex flex-col font-sans transition-colors relative overflow-hidden">
+      <div className="min-h-screen bg-[#FAF7F0] dark:bg-[#0D0D12] text-stone-950 dark:text-stone-50 flex flex-col font-sans transition-colors relative overflow-hidden">
         {/* Playful Neo-Brutalist background geometric shapes */}
         <div className="absolute top-12 left-10 w-24 h-24 rounded-full border-3 border-stone-900 bg-amber-300 -rotate-12 pointer-events-none hidden sm:block opacity-60 shadow-[4px_4px_0px_#121217]" />
         <div className="absolute bottom-16 right-12 w-28 h-28 rounded-3xl border-3 border-stone-900 bg-rose-400 rotate-12 pointer-events-none hidden sm:block opacity-60 shadow-[4px_4px_0px_#121217]" />
@@ -164,7 +164,7 @@ function MainApp() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#131211] text-stone-900 dark:text-stone-100 flex flex-col font-sans transition-colors">
+    <div className="min-h-screen bg-[#FAF7F0] dark:bg-[#0D0D12] text-stone-900 dark:text-stone-100 flex flex-col font-sans transition-colors">
       
       {/* Main Glassmorphic Navigation */}
       <Navigation

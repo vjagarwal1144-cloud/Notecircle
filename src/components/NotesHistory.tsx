@@ -257,9 +257,9 @@ export const NotesHistory: React.FC<NotesHistoryProps> = ({ onOpenCreateNote }) 
 
         <button
           onClick={onOpenCreateNote}
-          className="px-4 py-2 bg-amber-600 text-white text-xs font-semibold rounded-xl hover:bg-amber-700 flex items-center gap-1.5 shadow-xs transition-transform active:scale-98 self-start sm:self-auto cursor-pointer"
+          className="px-4 py-2 neo-btn-primary text-xs font-black flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
         >
-          <Plus className="w-3.5 h-3.5" />
+          <Plus className="w-3.5 h-3.5 stroke-[3]" />
           <span>New Note</span>
         </button>
       </div>

@@ -9,13 +9,6 @@ interface AuthModalProps {
   onClose: () => void;
 }
 
-const AVATAR_PRESETS = [
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80',
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&h=256&q=80',
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&h=256&q=80',
-  'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=256&h=256&q=80'
-];
-
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const { login, completeRegistration } = useAuth();
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'recovery'>('login');
@@ -35,7 +28,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [password, setPassword] = useState('');
   const [bio, setBio] = useState('');
   const [city, setCity] = useState('');
-  const [selectedAvatar, setSelectedAvatar] = useState(AVATAR_PRESETS[0]);
 
   // Login states
   const [loginIdentifier, setLoginIdentifier] = useState('');
@@ -145,7 +137,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         password,
         bio: bio.trim(),
         city: city.trim(),
-        avatarUrl: selectedAvatar
+        avatarUrl: undefined
       });
       onClose();
     } catch (err: any) {
@@ -385,23 +377,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               <form onSubmit={handleCompleteRegistration} className="space-y-3.5">
                 <div>
                   <label className="text-xs font-black uppercase tracking-wider text-stone-950 dark:text-stone-300 block mb-1 font-display">
-                    Choose Avatar
+                    Profile Avatar
                   </label>
-                  <div className="flex items-center gap-2">
-                    {AVATAR_PRESETS.map((url, i) => (
-                      <button
-                        type="button"
-                        key={i}
-                        onClick={() => setSelectedAvatar(url)}
-                        className={`w-10 h-10 rounded-full border-2 overflow-hidden transition-all cursor-pointer ${
-                          selectedAvatar === url
-                            ? 'border-amber-400 scale-110 shadow-[2px_2px_0px_#121217]'
-                            : 'border-stone-950 opacity-60 hover:opacity-100'
-                        }`}
-                      >
-                        <img src={url} alt="preset" className="w-full h-full object-cover" />
-                      </button>
-                    ))}
+                  <div className="flex items-center gap-3 p-2.5 rounded-2xl bg-amber-50 dark:bg-stone-900 border-2 border-stone-950 dark:border-stone-800">
+                    <div className="w-10 h-10 rounded-full bg-amber-300 text-stone-950 border-2 border-stone-950 flex items-center justify-center font-black text-sm shadow-[2px_2px_0px_#121217]">
+                      {(displayName.trim() || 'U').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="text-xs">
+                      <p className="font-black text-stone-900 dark:text-stone-100">Circle Initial Avatar</p>
+                      <p className="text-[11px] font-bold text-stone-500">You can upload a custom photo from your gallery anytime in Edit Profile.</p>
+                    </div>
                   </div>
                 </div>
 

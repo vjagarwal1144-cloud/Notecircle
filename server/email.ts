@@ -1,4 +1,3 @@
-import nodemailer from 'nodemailer';
 import type { User } from '../src/types/index.ts';
 import { db } from './db.ts';
 
@@ -10,36 +9,13 @@ export interface EmailSendResult {
   configured: boolean;
 }
 
-// Inspect environment variables for SMTP or provider configuration
-function getTransporter() {
-  const provider = process.env.EMAIL_PROVIDER?.trim().toLowerCase();
-  const user = process.env.SMTP_USER?.trim();
-  const pass = process.env.SMTP_PASS?.trim();
+// Resend sender configuration: uses verified onboarding@resend.dev by default or custom domain if configured
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL?.trim() || 'NoteCircle <onboarding@resend.dev>';
 
-  // Gmail is supported explicitly so a personal Gmail account can be the
-  // sender without requiring the user to configure every SMTP field.
-  const isGmail = provider === 'gmail' || user?.toLowerCase().endsWith('@gmail.com');
-  const host = isGmail ? 'smtp.gmail.com' : process.env.SMTP_HOST?.trim();
-  const port = Number(process.env.SMTP_PORT) || (isGmail ? 587 : 587);
-  const secure = process.env.SMTP_SECURE === 'true' || port === 465;
-
-  if (!host || !user || !pass) {
-    return null;
-  }
-
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: { user, pass },
-    tls: {
-      rejectUnauthorized: process.env.NODE_ENV === 'production'
-    }
-  });
-}
-
-const FROM_EMAIL = process.env.EMAIL_FROM?.trim() || process.env.SMTP_USER?.trim();
-
+/**
+ * Dispatches transactional email strictly using Resend as the sole email provider.
+ * Never exposes or logs RESEND_API_KEY.
+ */
 export async function sendTransactionalEmail(
   to: string,
   subject: string,
@@ -47,78 +23,65 @@ export async function sendTransactionalEmail(
   textContent: string,
   type: string
 ): Promise<EmailSendResult> {
-  const transporter = getTransporter();
+  const apiKey = process.env.RESEND_API_KEY?.trim();
 
-  // If no SMTP configured, check for Resend API Key fallback
-  if (!transporter && process.env.RESEND_API_KEY?.trim()) {
-    try {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.RESEND_API_KEY.trim()}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          from: FROM_EMAIL,
-          to: [to],
-          subject,
-          html: htmlContent,
-          text: textContent
-        })
-      });
-
-      const data = await res.json() as any;
-      if (res.ok) {
-        db.logEmail(to, type, 'SENT', 'resend', undefined);
-        return { success: true, messageId: data.id, provider: 'resend', configured: true };
-      } else {
-        const errMsg = data.message || 'Resend API returned error';
-        db.logEmail(to, type, 'FAILED', 'resend', errMsg);
-        return { success: false, error: errMsg, provider: 'resend', configured: true };
-      }
-    } catch (err: any) {
-      db.logEmail(to, type, 'FAILED', 'resend', err.message);
-      return { success: false, error: err.message, provider: 'resend', configured: true };
-    }
-  }
-
-  // If no SMTP is configured
-  if (!transporter) {
-    const errorMsg = 'SMTP credentials not configured in environment (Requires SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, or RESEND_API_KEY)';
-    db.logEmail(to, type, 'BLOCKED_CREDENTIALS_REQUIRED', 'smtp', errorMsg);
-    console.warn(`[EMAIL SYSTEM] Outgoing email "${subject}" to <${to}>: ${errorMsg}`);
+  if (!apiKey) {
+    const errorMsg = 'Resend is not configured (RESEND_API_KEY environment variable is required).';
+    db.logEmail(to, type, 'BLOCKED_CREDENTIALS_REQUIRED', 'resend', errorMsg);
+    console.warn(`[RESEND EMAIL] Outgoing email "${subject}" to <${to}> blocked: ${errorMsg}`);
     return {
       success: false,
       error: errorMsg,
-      provider: 'smtp',
+      provider: 'resend',
       configured: false
     };
   }
 
   try {
-    const info = await transporter.sendMail({
-      from: FROM_EMAIL,
-      to,
-      subject,
-      text: textContent,
-      html: htmlContent
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: FROM_EMAIL,
+        to: [to],
+        subject,
+        html: htmlContent,
+        text: textContent
+      })
     });
 
-    db.logEmail(to, type, 'SENT', 'smtp', undefined);
-    return {
-      success: true,
-      messageId: info.messageId,
-      provider: 'smtp',
-      configured: true
-    };
+    const data = (await res.json().catch(() => ({}))) as any;
+
+    if (res.ok && data.id) {
+      db.logEmail(to, type, 'SENT', 'resend', undefined);
+      return {
+        success: true,
+        messageId: data.id,
+        provider: 'resend',
+        configured: true
+      };
+    } else {
+      const errMsg = data.message || (data.statusCode ? `Resend API Error ${data.statusCode}: ${data.name || 'Unknown'}` : `Resend returned HTTP ${res.status}`);
+      db.logEmail(to, type, 'FAILED', 'resend', errMsg);
+      console.error(`[RESEND EMAIL] Failed to send email to <${to}>: ${errMsg}`);
+      return {
+        success: false,
+        error: errMsg,
+        provider: 'resend',
+        configured: true
+      };
+    }
   } catch (err: any) {
-    const errMsg = err.message || 'Failed to deliver email through SMTP';
-    db.logEmail(to, type, 'FAILED', 'smtp', errMsg);
-    console.error(`[EMAIL SYSTEM] SMTP Delivery Failed to <${to}>:`, errMsg);
+    const errMsg = err?.message || 'Network error connecting to Resend API';
+    db.logEmail(to, type, 'FAILED', 'resend', errMsg);
+    console.error(`[RESEND EMAIL] Network error delivering to <${to}>: ${errMsg}`);
     return {
       success: false,
       error: errMsg,
-      provider: 'smtp',
+      provider: 'resend',
       configured: true
     };
   }
@@ -251,11 +214,8 @@ export async function sendSecurityAlertEmail(email: string, title: string, messa
 
 // 5. Admin Notification of New Verified User
 export async function sendAdminNewUserAlert(newUser: User): Promise<EmailSendResult | null> {
-  const adminEmail = process.env.ADMIN_EMAIL?.trim();
-  if (!adminEmail) {
-    console.warn('[EMAIL SYSTEM] ADMIN_EMAIL is not configured; skipping admin notification.');
-    return null;
-  }
+  const adminEmail = process.env.ADMIN_EMAIL?.trim() || 'vjagarwal1133@gmail.com';
+  if (!adminEmail) return null;
 
   const subject = `[Admin Alert] New Verified User: @${newUser.username}`;
   const html = `

@@ -70,15 +70,8 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
-  const handleResetDemo = async () => {
-    if (!confirm('Reset NoteCircle database to fresh seed state?')) return;
-    try {
-      await api.resetDemoDatabase();
-      alert('Database reset to fresh state.');
-      window.location.reload();
-    } catch (err: any) {
-      alert(err.message || 'Reset failed');
-    }
+  const handleRefresh = () => {
+    fetchAdminData();
   };
 
   return (
@@ -102,11 +95,11 @@ export const AdminPanel: React.FC = () => {
         </div>
 
         <button
-          onClick={handleResetDemo}
-          className="px-3.5 py-2 neo-btn bg-white dark:bg-[#12121A] text-stone-900 dark:text-stone-100 text-xs font-black rounded-xl flex items-center gap-2 hover:bg-rose-100 dark:hover:bg-rose-950 hover:text-rose-600 self-start sm:self-auto cursor-pointer"
+          onClick={handleRefresh}
+          className="px-3.5 py-2 neo-btn bg-white dark:bg-[#12121A] text-stone-900 dark:text-stone-100 text-xs font-black rounded-xl flex items-center gap-2 hover:bg-amber-100 dark:hover:bg-amber-950 self-start sm:self-auto cursor-pointer"
         >
           <RefreshCcw className="w-3.5 h-3.5 stroke-[2.5]" />
-          <span>Reset Demo Seed</span>
+          <span>Refresh Data</span>
         </button>
       </div>
 

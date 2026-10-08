@@ -1,4 +1,7 @@
 import { Router } from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
 import { db, hashPassword } from '../db.ts';
 import { getAuthUser } from './auth.ts';
 import { getRedactedProfile, isBlocked } from '../privacy.ts';
@@ -138,6 +141,152 @@ usersRouter.put('/me', (req, res) => {
   db.logAudit(viewer.id, updatedUser.username, 'PROFILE_UPDATED', `Display name: ${updatedUser.displayName}, handle: @${updatedUser.username}`);
 
   return res.json({ user: updatedUser });
+});
+
+// POST /api/users/me/avatar (Upload and set profile photo)
+usersRouter.post('/me/avatar', (req, res) => {
+  const viewer = getAuthUser(req);
+  if (!viewer) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { dataUrl } = req.body;
+  if (!dataUrl || typeof dataUrl !== 'string') {
+    return res.status(400).json({ error: 'Valid image data is required.' });
+  }
+
+  // Parse Data URL: data:image/png;base64,....
+  const matches = dataUrl.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+  if (!matches) {
+    return res.status(400).json({ error: 'Invalid image format. Expected base64 Data URL.' });
+  }
+
+  const mimeType = matches[1].toLowerCase();
+  const base64Data = matches[2];
+
+  // Validate MIME type
+  const allowedMimeTypes: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif'
+  };
+
+  const extension = allowedMimeTypes[mimeType];
+  if (!extension) {
+    return res.status(400).json({ error: 'Unsupported file format. Please upload JPG, PNG, WEBP, or GIF.' });
+  }
+
+  const buffer = Buffer.from(base64Data, 'base64');
+
+  // Maximum file size: 5MB
+  const MAX_SIZE = 5 * 1024 * 1024;
+  if (buffer.length > MAX_SIZE) {
+    return res.status(400).json({ error: 'Image exceeds maximum allowed size of 5MB.' });
+  }
+
+  // Magic bytes validation
+  let validMagicBytes = false;
+  if (buffer.length >= 4) {
+    // JPEG: FF D8 FF
+    if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) validMagicBytes = true;
+    // PNG: 89 50 4E 47
+    else if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) validMagicBytes = true;
+    // GIF: GIF8
+    else if (buffer.toString('ascii', 0, 4) === 'GIF8') validMagicBytes = true;
+    // WEBP: RIFF....WEBP
+    else if (buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') validMagicBytes = true;
+  }
+
+  if (!validMagicBytes) {
+    return res.status(400).json({ error: 'Invalid or corrupted image file.' });
+  }
+
+  const uploadsDir = path.resolve(process.cwd(), 'data/uploads/avatars');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+
+  const safeFilename = `avatar_${viewer.id}_${Date.now()}_${crypto.randomBytes(3).toString('hex')}.${extension}`;
+  const filePath = path.join(uploadsDir, safeFilename);
+
+  fs.writeFileSync(filePath, buffer);
+
+  const newAvatarUrl = `/uploads/avatars/${safeFilename}`;
+
+  // Clean up previous uploaded avatar file if it was in local uploads
+  if (viewer.avatarUrl && viewer.avatarUrl.startsWith('/uploads/avatars/')) {
+    try {
+      const oldFilename = path.basename(viewer.avatarUrl);
+      const oldFilePath = path.join(uploadsDir, oldFilename);
+      if (fs.existsSync(oldFilePath)) {
+        fs.unlinkSync(oldFilePath);
+      }
+    } catch (cleanupErr) {
+      console.warn('Failed to clean up old avatar:', cleanupErr);
+    }
+  }
+
+  let updatedUser = viewer;
+  db.update('users', (users) =>
+    users.map((u) => {
+      if (u.id === viewer.id) {
+        updatedUser = {
+          ...u,
+          avatarUrl: newAvatarUrl
+        };
+        return updatedUser;
+      }
+      return u;
+    })
+  );
+
+  db.logAudit(viewer.id, viewer.username, 'AVATAR_UPLOADED', `New avatar saved: ${newAvatarUrl}`);
+
+  return res.json({
+    success: true,
+    avatarUrl: newAvatarUrl,
+    user: updatedUser
+  });
+});
+
+// DELETE /api/users/me/avatar (Remove profile photo)
+usersRouter.delete('/me/avatar', (req, res) => {
+  const viewer = getAuthUser(req);
+  if (!viewer) return res.status(401).json({ error: 'Unauthorized' });
+
+  // Clean up previous uploaded avatar file
+  if (viewer.avatarUrl && viewer.avatarUrl.startsWith('/uploads/avatars/')) {
+    try {
+      const uploadsDir = path.resolve(process.cwd(), 'data/uploads/avatars');
+      const oldFilename = path.basename(viewer.avatarUrl);
+      const oldFilePath = path.join(uploadsDir, oldFilename);
+      if (fs.existsSync(oldFilePath)) {
+        fs.unlinkSync(oldFilePath);
+      }
+    } catch {}
+  }
+
+  let updatedUser = viewer;
+  db.update('users', (users) =>
+    users.map((u) => {
+      if (u.id === viewer.id) {
+        updatedUser = {
+          ...u,
+          avatarUrl: ''
+        };
+        return updatedUser;
+      }
+      return u;
+    })
+  );
+
+  db.logAudit(viewer.id, viewer.username, 'AVATAR_REMOVED', 'Removed custom profile photo');
+
+  return res.json({
+    success: true,
+    avatarUrl: null,
+    user: updatedUser
+  });
 });
 
 // PUT /api/users/me/privacy (Update privacy settings)

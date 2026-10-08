@@ -1,5 +1,6 @@
 import express from 'express';
 import http from 'node:http';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
@@ -17,6 +18,7 @@ import { adminRouter } from './server/routes/admin.ts';
 import { featuresRouter } from './server/routes/features.ts';
 import { realtimeHub } from './server/realtime.ts';
 import { parseToken, db } from './server/db.ts';
+import { checkSupabaseHealth } from './server/supabase.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -65,6 +67,14 @@ async function startServer() {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+  // Ensure persistent uploads storage directory exists
+  const uploadsDir = path.resolve(__dirname, 'data/uploads');
+  const avatarsDir = path.resolve(uploadsDir, 'avatars');
+  if (!fs.existsSync(avatarsDir)) {
+    fs.mkdirSync(avatarsDir, { recursive: true });
+  }
+  app.use('/uploads', express.static(uploadsDir));
+
   // Rate limiters for sensitive endpoints
   const authLimiter = createRateLimiter(60, 60 * 1000); // 60 req/min for auth
   const chatLimiter = createRateLimiter(180, 60 * 1000); // 180 req/min for chat
@@ -86,6 +96,12 @@ async function startServer() {
   // Health check endpoint
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', service: 'NoteCircle API', time: new Date().toISOString() });
+  });
+
+  // Supabase connection health check
+  app.get('/api/health/supabase', async (_req, res) => {
+    const health = await checkSupabaseHealth();
+    return res.status(health.connected ? 200 : 503).json(health);
   });
 
   // WebSocket Server Setup with authenticated handshake

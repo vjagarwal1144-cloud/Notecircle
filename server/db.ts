@@ -1226,6 +1226,10 @@ class SqlDatabaseManager {
     return { id, expiresAt, cooldownUntil: resendAvailableAt };
   }
 
+  public removeRegistrationOtp(id: string): void {
+    this.sqlite.prepare('DELETE FROM registration_otps WHERE id = ?;').run(id);
+  }
+
   public getLatestRegistrationOtp(email: string): any {
     return this.sqlite.prepare(`
       SELECT * FROM registration_otps

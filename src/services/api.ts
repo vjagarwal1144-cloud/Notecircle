@@ -147,6 +147,17 @@ export const api = {
       body: JSON.stringify(data)
     });
   },
+  async uploadAvatar(dataUrl: string) {
+    return request<{ success: boolean; avatarUrl: string; user: User }>('/api/users/me/avatar', {
+      method: 'POST',
+      body: JSON.stringify({ dataUrl })
+    });
+  },
+  async removeAvatar() {
+    return request<{ success: boolean; avatarUrl: null; user: User }>('/api/users/me/avatar', {
+      method: 'DELETE'
+    });
+  },
   async updateAvailability(availability: Partial<UserAvailability>) {
     return request<{ availability: UserAvailability; user: User }>('/api/users/me/availability', {
       method: 'PUT',
@@ -391,9 +402,6 @@ export const api = {
   },
   async getAdminMetrics() {
     return request<{ metrics: any }>('/api/reports/admin/metrics');
-  },
-  async resetDemoDatabase() {
-    return request<{ success: boolean; message: string }>('/api/reports/admin/reset-demo', { method: 'POST' });
   },
 
   // Cryptographic Public Key Registry & Safety Numbers

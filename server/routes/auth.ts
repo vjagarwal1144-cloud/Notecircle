@@ -144,29 +144,25 @@ authRouter.post('/register/send-otp', async (req, res) => {
 
   const otpRecord = db.createRegistrationOtp(cleanEmail, otpHash, 10, 60);
 
-  // Dispatch real transactional email. The OTP is never returned to the client.
+  // Dispatch real transactional email strictly through Resend
   const emailRes = await sendRegistrationOtpEmail(cleanEmail, otp, 10);
 
-  // Do not claim that an OTP was sent when the email provider is unavailable.
-  // This prevents a confusing "code sent" state when SMTP/Resend is not configured
-  // or the provider rejects the message.
   if (!emailRes.success) {
-    console.error('[AUTH OTP] Registration OTP delivery failed:', emailRes.error || 'Unknown email delivery error');
-    return res.status(503).json({
-      error: 'We could not send the verification code right now. Please try again shortly.',
-      code: 'EMAIL_DELIVERY_FAILED',
-      emailConfigured: emailRes.configured
+    // If delivery failed or Resend is not configured, remove the OTP record
+    db.removeRegistrationOtp(otpRecord.id);
+    return res.status(502).json({
+      error: emailRes.error || 'Failed to deliver verification code through Resend. Please check email service configuration.',
+      configured: emailRes.configured
     });
   }
 
-  // Requirement: NEVER expose OTP through API response, logs, or client payload.
+  // Requirement 5 & 6: Only report success after confirmed Resend delivery
   return res.json({
     success: true,
     message: 'Verification code sent to your email.',
     email: cleanEmail,
     expiresAt: otpRecord.expiresAt,
-    cooldownUntil: otpRecord.cooldownUntil,
-    emailConfigured: true
+    cooldownUntil: otpRecord.cooldownUntil
   });
 });
 
@@ -260,16 +256,8 @@ authRouter.post('/register/complete', async (req, res) => {
     return res.status(409).json({ error: 'Email is already registered.' });
   }
 
-  const defaultAvatars = [
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80',
-    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&h=256&q=80',
-    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&h=256&q=80',
-    'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=256&h=256&q=80'
-  ];
-
-  const chosenAvatar = avatarUrl && avatarUrl.trim()
-    ? avatarUrl.trim()
-    : defaultAvatars[Math.floor(Math.random() * defaultAvatars.length)];
+  // Clean avatar handling (no remote demo/Unsplash defaults; uses custom initials badge if not provided)
+  const chosenAvatar = avatarUrl && avatarUrl.trim() ? avatarUrl.trim() : '';
 
   const newUser: User = {
     id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,

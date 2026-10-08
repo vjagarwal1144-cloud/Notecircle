@@ -172,8 +172,8 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   const userInitial = (currentUser?.displayName || 'L')[0].toUpperCase();
 
   return (
-    <div className="min-h-screen bg-[#FBF9F4] dark:bg-[#0E0E14] text-stone-950 dark:text-stone-50 pb-28 sm:pb-16 font-sans">
-      <div className="max-w-md sm:max-w-xl mx-auto px-4 sm:px-6 pt-3 space-y-4">
+    <div className="min-h-screen bg-[#FAF7F0] dark:bg-[#0D0D12] text-stone-950 dark:text-stone-50 pb-28 sm:pb-16 font-sans">
+      <div className="max-w-md sm:max-w-xl mx-auto px-3 sm:px-6 pt-3 space-y-4">
         {/* Offline Alert */}
         {!isOnline && (
           <div className="p-2.5 bg-[#FFC72C] border-2.5 border-black rounded-2xl flex items-center gap-2 text-xs font-black text-black shadow-[3px_3px_0px_#000]">

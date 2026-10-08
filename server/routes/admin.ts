@@ -25,11 +25,13 @@ adminRouter.get('/metrics', requireAdmin, (_req, res) => {
   const bugReports = db.get('bugReports') || [];
   const connections = db.get('connections') || [];
   const deviceKeys = db.get('devicePublicKeys') || [];
+  const emailLogs = db.getEmailLogs(50) || [];
 
   return res.json({
     metrics: {
       totalUsers: users.length,
       activeUsers: users.filter((u) => !u.isSuspended).length,
+      verifiedUsers: users.filter((u) => u.email).length,
       suspendedUsers: users.filter((u) => u.isSuspended).length,
       totalNotes: notes.length,
       activeNotes: notes.filter((n) => n.status === 'ACTIVE').length,
@@ -40,9 +42,17 @@ adminRouter.get('/metrics', requireAdmin, (_req, res) => {
       totalBugReports: bugReports.length,
       openBugReports: bugReports.filter((b) => b.status !== 'RESOLVED').length,
       totalConnections: connections.length,
-      registeredE2EDevices: deviceKeys.filter((k) => !k.isRevoked).length
+      registeredE2EDevices: deviceKeys.filter((k) => !k.isRevoked).length,
+      totalEmailLogs: emailLogs.length,
+      emailConfigured: !!(process.env.SMTP_HOST || process.env.RESEND_API_KEY)
     }
   });
+});
+
+// GET /api/admin/email-logs
+adminRouter.get('/email-logs', requireAdmin, (_req, res) => {
+  const logs = db.getEmailLogs(100);
+  return res.json({ logs });
 });
 
 // GET /api/admin/audit-logs
@@ -125,15 +135,4 @@ adminRouter.post('/backup/verify', requireAdmin, (req, res) => {
     console.error('Backup verification failed:', err);
     return res.status(500).json({ error: 'Backup verification failed: ' + err.message });
   }
-});
-
-// POST /api/admin/reset-database (Development only, strictly disallowed in production)
-adminRouter.post('/reset-database', requireAdmin, (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(403).json({ error: 'Database reset tool is strictly disabled in production environments.' });
-  }
-  const viewer = (req as any).viewer;
-  db.resetToDefault();
-  db.logAudit(viewer.id, viewer.username, 'DATABASE_RESET', 'Development database reset to clean baseline');
-  return res.json({ success: true, message: 'Development database reset to clean baseline' });
 });

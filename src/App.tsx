@@ -51,6 +51,12 @@ function MainApp() {
             onOpenAvailability={() => setIsAvailabilityOpen(true)}
             onOpenChatWithUser={handleOpenChatWithUser}
             onOpenProfile={handleOpenProfile}
+            onNavigate={(tab) => {
+              setViewingProfileUsername(null);
+              setActiveTab(tab);
+            }}
+            onOpenNotifications={() => setIsNotificationsOpen(true)}
+            onOpenSettings={() => setActiveTab('settings')}
           />
         );
       case 'notes':

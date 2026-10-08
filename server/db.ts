@@ -357,6 +357,30 @@ class SqlDatabaseManager {
         PRIMARY KEY (user_id, contact_id)
       );
 
+      CREATE TABLE IF NOT EXISTS registration_otps (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        otp_hash TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        attempts INTEGER DEFAULT 0,
+        max_attempts INTEGER DEFAULT 5,
+        resend_available_at TEXT NOT NULL,
+        verified INTEGER DEFAULT 0,
+        verification_token_hash TEXT,
+        used INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS email_logs (
+        id TEXT PRIMARY KEY,
+        recipient TEXT NOT NULL,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        error TEXT,
+        created_at TEXT NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_users_username ON users (username);
       CREATE INDEX IF NOT EXISTS idx_connections_users ON connections (requester_id, target_id);
       CREATE INDEX IF NOT EXISTS idx_notes_user_status ON notes (user_id, status);
@@ -366,443 +390,33 @@ class SqlDatabaseManager {
       CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions (token);
       CREATE INDEX IF NOT EXISTS idx_recovery_user ON password_recovery_requests (user_id);
       CREATE INDEX IF NOT EXISTS idx_safety_user ON verified_safety_numbers (user_id);
+      CREATE INDEX IF NOT EXISTS idx_reg_email ON registration_otps (email);
+      CREATE INDEX IF NOT EXISTS idx_email_recipient ON email_logs (recipient);
     `);
   }
 
+  private cleanSeedDemoDataAndPreserveReal(): void {
+    // Strictly preserve real user accounts while purging demo/fake seeded content
+    const demoUserIds = ['usr_rahul', 'usr_priya', 'usr_amit', 'usr_admin'];
+    for (const id of demoUserIds) {
+      this.sqlite.prepare('DELETE FROM users WHERE id = ?;').run(id);
+      this.sqlite.prepare('DELETE FROM notes WHERE user_id = ?;').run(id);
+      this.sqlite.prepare('DELETE FROM connections WHERE requester_id = ? OR target_id = ?;').run(id, id);
+      this.sqlite.prepare('DELETE FROM close_friends WHERE user_id = ? OR friend_id = ?;').run(id, id);
+      this.sqlite.prepare('DELETE FROM messages WHERE sender_id = ?;').run(id);
+      this.sqlite.prepare('DELETE FROM plans WHERE creator_id = ?;').run(id);
+      this.sqlite.prepare('DELETE FROM memory_capsules WHERE creator_id = ?;').run(id);
+      this.sqlite.prepare('DELETE FROM sessions WHERE user_id = ?;').run(id);
+      this.sqlite.prepare('DELETE FROM notifications WHERE recipient_id = ? OR sender_id = ?;').run(id, id);
+    }
+    this.sqlite.prepare("DELETE FROM conversations WHERE id = 'conv_rp_seed';").run();
+    // Grant verified admin privileges to real owner emails
+    this.sqlite.prepare("UPDATE users SET is_admin = 1 WHERE email IN ('vjagarwal1133@gmail.com', 'vjagarwal1144@gmail.com');").run();
+  }
+
   private seedInitialIfEmpty(): void {
-    // Separate production database from seed/demo data
-    // In production, do not inject mock personas or default passwords!
-    if (process.env.NODE_ENV === 'production' && process.env.SEED_DEMO_DATA !== 'true') {
-      return;
-    }
-
-    const now = new Date();
-    const inTwoDays = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
-    const inEightHours = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString();
-    const inFourHours = new Date(now.getTime() + 4 * 60 * 60 * 1000).toISOString();
-    const inOneDay = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
-
-    const initialUsers: User[] = [
-      {
-        id: 'usr_rahul',
-        username: 'rahul',
-        displayName: 'Rahul Sharma',
-        email: 'rahul@notecircle.app',
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80',
-        bio: 'Lover of mountains, design & slow living. 🏕️',
-        city: 'Bangalore, India',
-        birthday: '1996-05-14',
-        workplace: 'Craft & Code Studio',
-        isPrivate: true,
-        isAdmin: false,
-        availability: {
-          code: 'family',
-          label: 'Family Time',
-          emoji: '🏕️',
-          customStatus: 'Spending time with family. Urgent calls only.',
-          expiresAt: inTwoDays,
-          strictDnd: false,
-          updatedAt: now.toISOString()
-        },
-        privacySettings: {
-          whoCanMessageMe: 'mutual',
-          whoCanSeeOnlineStatus: 'connections',
-          whoCanSeeReadReceipts: 'connections',
-          whoCanSeeTyping: 'connections',
-          whoCanFollowMe: 'require_approval',
-          whoCanReply: 'connections',
-          whoCanReact: 'connections',
-          bioVisibility: 'connections',
-          cityVisibility: 'connections',
-          birthdayVisibility: 'only_me',
-          workplaceVisibility: 'connections',
-          followerCountsVisibility: 'connections',
-          dndModeStrict: false
-        },
-        notificationSettings: {
-          messages: true,
-          messageRequests: true,
-          followRequests: true,
-          acceptedRequests: true,
-          reactions: true,
-          replies: true,
-          noteExpiration: true,
-          securityAlerts: true
-        },
-        createdAt: now.toISOString()
-      },
-      {
-        id: 'usr_priya',
-        username: 'priya',
-        displayName: 'Priya Patel',
-        email: 'priya@notecircle.app',
-        avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&h=256&q=80',
-        bio: 'Ceramicist & visual storyteller. Offline mornings. ☕',
-        city: 'Mumbai, India',
-        birthday: '1998-11-22',
-        workplace: 'Studio Clay',
-        isPrivate: true,
-        isAdmin: false,
-        availability: {
-          code: 'studying',
-          label: 'Deep Focus Studio',
-          emoji: '📚',
-          customStatus: 'Glazing ceramics all afternoon. Replies delayed.',
-          expiresAt: inEightHours,
-          strictDnd: false,
-          updatedAt: now.toISOString()
-        },
-        privacySettings: {
-          whoCanMessageMe: 'mutual',
-          whoCanSeeOnlineStatus: 'connections',
-          whoCanSeeReadReceipts: 'connections',
-          whoCanSeeTyping: 'connections',
-          whoCanFollowMe: 'require_approval',
-          whoCanReply: 'connections',
-          whoCanReact: 'connections',
-          bioVisibility: 'connections',
-          cityVisibility: 'connections',
-          birthdayVisibility: 'only_me',
-          workplaceVisibility: 'connections',
-          followerCountsVisibility: 'connections',
-          dndModeStrict: false
-        },
-        notificationSettings: {
-          messages: true,
-          messageRequests: true,
-          followRequests: true,
-          acceptedRequests: true,
-          reactions: true,
-          replies: true,
-          noteExpiration: true,
-          securityAlerts: true
-        },
-        createdAt: now.toISOString()
-      },
-      {
-        id: 'usr_amit',
-        username: 'amit',
-        displayName: 'Amit Verma',
-        email: 'amit@notecircle.app',
-        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&h=256&q=80',
-        bio: 'Sound designer & late-night cyclist. 🎧',
-        city: 'New Delhi, India',
-        isPrivate: true,
-        isAdmin: false,
-        availability: {
-          code: 'sleeping',
-          label: 'Sleeping',
-          emoji: '💤',
-          customStatus: 'Asleep after recording session.',
-          expiresAt: inFourHours,
-          strictDnd: true,
-          updatedAt: now.toISOString()
-        },
-        privacySettings: {
-          whoCanMessageMe: 'followers',
-          whoCanSeeOnlineStatus: 'connections',
-          whoCanSeeReadReceipts: 'connections',
-          whoCanSeeTyping: 'connections',
-          whoCanFollowMe: 'require_approval',
-          whoCanReply: 'connections',
-          whoCanReact: 'connections',
-          bioVisibility: 'connections',
-          cityVisibility: 'connections',
-          birthdayVisibility: 'only_me',
-          workplaceVisibility: 'connections',
-          followerCountsVisibility: 'connections',
-          dndModeStrict: true
-        },
-        notificationSettings: {
-          messages: true,
-          messageRequests: true,
-          followRequests: true,
-          acceptedRequests: true,
-          reactions: true,
-          replies: true,
-          noteExpiration: true,
-          securityAlerts: true
-        },
-        createdAt: now.toISOString()
-      },
-      {
-        id: 'usr_admin',
-        username: 'admin',
-        displayName: 'NoteCircle Admin',
-        email: 'safety@notecircle.app',
-        avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=256&h=256&q=80',
-        bio: 'Trust, Safety & Security Operations',
-        city: 'San Francisco, CA',
-        isPrivate: true,
-        isAdmin: true,
-        availability: {
-          code: 'available',
-          label: 'Active',
-          emoji: '🛡️',
-          strictDnd: false,
-          updatedAt: now.toISOString()
-        },
-        privacySettings: {
-          whoCanMessageMe: 'nobody',
-          whoCanSeeOnlineStatus: 'connections',
-          whoCanSeeReadReceipts: 'connections',
-          whoCanSeeTyping: 'connections',
-          whoCanFollowMe: 'require_approval',
-          whoCanReply: 'nobody',
-          whoCanReact: 'connections',
-          bioVisibility: 'connections',
-          cityVisibility: 'connections',
-          birthdayVisibility: 'only_me',
-          workplaceVisibility: 'connections',
-          followerCountsVisibility: 'connections',
-          dndModeStrict: false
-        },
-        notificationSettings: {
-          messages: true,
-          messageRequests: true,
-          followRequests: true,
-          acceptedRequests: true,
-          reactions: true,
-          replies: true,
-          noteExpiration: true,
-          securityAlerts: true
-        },
-        createdAt: now.toISOString()
-      }
-    ];
-
-    const insertUser = this.sqlite.prepare(`
-      INSERT OR IGNORE INTO users (
-        id, username, display_name, email, phone, avatar_url, bio, city, birthday, workplace,
-        is_private, is_admin, is_suspended, availability, privacy_settings, notification_settings, password_hash, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-    `);
-
-    for (const u of initialUsers) {
-      insertUser.run(
-        u.id,
-        u.username,
-        u.displayName,
-        u.email,
-        u.phone || null,
-        u.avatarUrl || null,
-        u.bio || null,
-        u.city || null,
-        u.birthday || null,
-        u.workplace || null,
-        u.isPrivate ? 1 : 0,
-        u.isAdmin ? 1 : 0,
-        0,
-        JSON.stringify(u.availability),
-        JSON.stringify(u.privacySettings),
-        JSON.stringify(u.notificationSettings),
-        hashPassword(crypto.randomBytes(24).toString('hex')),
-        u.createdAt
-      );
-    }
-
-    // Seed initial follow connections: Rahul & Priya are mutual followers; Amit follows Rahul
-    const insertConn = this.sqlite.prepare(`
-      INSERT OR IGNORE INTO connections (id, requester_id, target_id, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?);
-    `);
-    insertConn.run('conn_rp_1', 'usr_rahul', 'usr_priya', 'ACCEPTED', now.toISOString(), now.toISOString());
-    insertConn.run('conn_pr_1', 'usr_priya', 'usr_rahul', 'ACCEPTED', now.toISOString(), now.toISOString());
-    insertConn.run('conn_ar_1', 'usr_amit', 'usr_rahul', 'ACCEPTED', now.toISOString(), now.toISOString());
-
-    // Close friends
-    const insertCf = this.sqlite.prepare(`
-      INSERT OR IGNORE INTO close_friends (id, user_id, friend_id, created_at)
-      VALUES (?, ?, ?, ?);
-    `);
-    insertCf.run('cf_rp_1', 'usr_rahul', 'usr_priya', now.toISOString());
-    insertCf.run('cf_pr_1', 'usr_priya', 'usr_rahul', now.toISOString());
-
-    // Seed notes
-    const insertNote = this.sqlite.prepare(`
-      INSERT OR IGNORE INTO notes (
-        id, user_id, author, emoji, category, category_label, text, audience, selected_user_ids,
-        expires_at, scheduled_for, status, is_pinned, is_draft, allow_replies, allow_reactions, reactions, replies, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-    `);
-
-    const rahulAuthor = {
-      id: 'usr_rahul',
-      username: 'rahul',
-      displayName: 'Rahul Sharma',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80'
-    };
-
-    const priyaAuthor = {
-      id: 'usr_priya',
-      username: 'priya',
-      displayName: 'Priya Patel',
-      avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&h=256&q=80'
-    };
-
-    insertNote.run(
-      'note_seed_1',
-      'usr_rahul',
-      JSON.stringify(rahulAuthor),
-      '🏕️',
-      'family',
-      'Family Trip',
-      "I'm spending time with my family in Coorg for the weekend. Please don't call unless urgent! 🌲",
-      'followers',
-      null,
-      inTwoDays,
-      null,
-      'ACTIVE',
-      1,
-      0,
-      1,
-      1,
-      JSON.stringify([
-        {
-          id: 'rx_seed_1',
-          noteId: 'note_seed_1',
-          userId: 'usr_priya',
-          username: 'priya',
-          displayName: 'Priya Patel',
-          emoji: '❤️',
-          createdAt: now.toISOString()
-        }
-      ]),
-      JSON.stringify([
-        {
-          id: 'rep_seed_1',
-          noteId: 'note_seed_1',
-          userId: 'usr_priya',
-          username: 'priya',
-          displayName: 'Priya Patel',
-          avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&h=256&q=80',
-          text: 'Have a wonderful trip with family Rahul!',
-          createdAt: now.toISOString()
-        }
-      ]),
-      now.toISOString(),
-      null
-    );
-
-    insertNote.run(
-      'note_seed_2',
-      'usr_priya',
-      JSON.stringify(priyaAuthor),
-      '🏺',
-      'study',
-      'Studio Workshop',
-      'Glazing and firing porcelain ceramics at Studio Clay today. Offline till evening! ☕✨',
-      'followers',
-      null,
-      inEightHours,
-      null,
-      'ACTIVE',
-      1,
-      0,
-      1,
-      1,
-      JSON.stringify([
-        {
-          id: 'rx_seed_2',
-          noteId: 'note_seed_2',
-          userId: 'usr_rahul',
-          username: 'rahul',
-          displayName: 'Rahul Sharma',
-          emoji: '👏',
-          createdAt: now.toISOString()
-        }
-      ]),
-      JSON.stringify([]),
-      now.toISOString(),
-      null
-    );
-
-    // Initial conversation
-    const insertConv = this.sqlite.prepare(`
-      INSERT OR IGNORE INTO conversations (id, type, title, participant_ids, last_message, unread_count, is_muted, is_archived, is_pinned, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-    `);
-
-    const initialMsgObj = {
-      id: 'msg_seed_1',
-      conversationId: 'conv_rp_seed',
-      senderId: 'usr_priya',
-      senderName: 'Priya Patel',
-      senderAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&h=256&q=80',
-      text: 'Hey Rahul! Saw your note about Coorg. Have an amazing, relaxing time with family! 🏕️',
-      reactions: [],
-      status: 'DELIVERED',
-      createdAt: now.toISOString()
-    };
-
-    insertConv.run(
-      'conv_rp_seed',
-      'direct',
-      null,
-      JSON.stringify(['usr_rahul', 'usr_priya']),
-      JSON.stringify(initialMsgObj),
-      0,
-      0,
-      0,
-      0,
-      now.toISOString(),
-      now.toISOString()
-    );
-
-    // Initial message
-    const insertMsg = this.sqlite.prepare(`
-      INSERT OR IGNORE INTO messages (id, conversation_id, sender_id, sender_name, sender_avatar, text, encrypted_payload, reactions, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-    `);
-    insertMsg.run(
-      'msg_seed_1',
-      'conv_rp_seed',
-      'usr_priya',
-      'Priya Patel',
-      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&h=256&q=80',
-      'Hey Rahul! Saw your note about Coorg. Have an amazing, relaxing time with family! 🏕️',
-      null,
-      JSON.stringify([]),
-      'DELIVERED',
-      now.toISOString()
-    );
-
-    // Initial Plan
-    const insertPlan = this.sqlite.prepare(`
-      INSERT OR IGNORE INTO plans (id, creator_id, title, emoji, scheduled_time, location, rsvps, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-    `);
-    insertPlan.run(
-      'plan_seed_1',
-      'usr_priya',
-      'Sunday Morning Farmers Market & Chai',
-      '☕',
-      'Sunday at 9:30 AM',
-      'Koramangala Community Market',
-      JSON.stringify([
-        { userId: 'usr_priya', displayName: 'Priya Patel', status: 'attending', respondedAt: now.toISOString() },
-        { userId: 'usr_rahul', displayName: 'Rahul Sharma', status: 'attending', respondedAt: now.toISOString() }
-      ]),
-      now.toISOString()
-    );
-
-    // Initial Memory Capsule
-    const insertCapsule = this.sqlite.prepare(`
-      INSERT OR IGNORE INTO memory_capsules (id, creator_id, title, cover_emoji, unlock_at, items, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?);
-    `);
-    insertCapsule.run(
-      'capsule_seed_1',
-      'usr_rahul',
-      'Summer Mountain Expedition 🌲',
-      '⛰️',
-      inTwoDays,
-      JSON.stringify([
-        { type: 'note', text: 'Pack rain gear and hiking poles before dawn.' },
-        { type: 'quote', text: 'The mountains are calling.' }
-      ]),
-      now.toISOString()
-    );
+    // Demo seeding is permanently disabled in favor of real database persistence
+    this.cleanSeedDemoDataAndPreserveReal();
   }
 
   // Generic getter mapped to SQL tables
@@ -1591,6 +1205,92 @@ class SqlDatabaseManager {
     } else {
       this.sqlite.prepare('DELETE FROM verified_safety_numbers WHERE user_id = ? AND contact_id = ?;').run(userId, contactId);
     }
+  }
+
+  // --- Registration OTP Management ---
+  public createRegistrationOtp(email: string, otpHash: string, expiresMinutes = 10, cooldownSeconds = 60): { id: string; expiresAt: string; cooldownUntil: string } {
+    const id = `otp_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const now = Date.now();
+    const expiresAt = new Date(now + expiresMinutes * 60 * 1000).toISOString();
+    const resendAvailableAt = new Date(now + cooldownSeconds * 1000).toISOString();
+    const createdAt = new Date(now).toISOString();
+
+    // Invalidate previous unverified OTPs for this email
+    this.sqlite.prepare('UPDATE registration_otps SET used = 1 WHERE email = ? AND verified = 0;').run(email);
+
+    this.sqlite.prepare(`
+      INSERT INTO registration_otps (id, email, otp_hash, expires_at, attempts, max_attempts, resend_available_at, verified, used, created_at)
+      VALUES (?, ?, ?, ?, 0, 5, ?, 0, 0, ?);
+    `).run(id, email, otpHash, expiresAt, resendAvailableAt, createdAt);
+
+    return { id, expiresAt, cooldownUntil: resendAvailableAt };
+  }
+
+  public getLatestRegistrationOtp(email: string): any {
+    return this.sqlite.prepare(`
+      SELECT * FROM registration_otps
+      WHERE email = ? AND used = 0
+      ORDER BY created_at DESC
+      LIMIT 1;
+    `).get(email);
+  }
+
+  public checkEmailCooldown(email: string): { inCooldown: boolean; secondsRemaining: number } {
+    const latest = this.sqlite.prepare(`
+      SELECT resend_available_at FROM registration_otps
+      WHERE email = ?
+      ORDER BY created_at DESC
+      LIMIT 1;
+    `).get(email) as any;
+
+    if (!latest) return { inCooldown: false, secondsRemaining: 0 };
+    const cooldownTime = new Date(latest.resend_available_at).getTime();
+    const diff = cooldownTime - Date.now();
+    if (diff > 0) {
+      return { inCooldown: true, secondsRemaining: Math.ceil(diff / 1000) };
+    }
+    return { inCooldown: false, secondsRemaining: 0 };
+  }
+
+  public incrementOtpAttempts(id: string): number {
+    this.sqlite.prepare('UPDATE registration_otps SET attempts = attempts + 1 WHERE id = ?;').run(id);
+    const row = this.sqlite.prepare('SELECT attempts, max_attempts FROM registration_otps WHERE id = ?;').get(id) as any;
+    return row ? row.attempts : 0;
+  }
+
+  public markRegistrationOtpVerified(id: string, verificationTokenHash: string): void {
+    this.sqlite.prepare(`
+      UPDATE registration_otps
+      SET verified = 1, verification_token_hash = ?
+      WHERE id = ?;
+    `).run(verificationTokenHash, id);
+  }
+
+  public consumeRegistrationOtp(email: string, verificationTokenHash: string): boolean {
+    const row = this.sqlite.prepare(`
+      SELECT id FROM registration_otps
+      WHERE email = ? AND verification_token_hash = ? AND verified = 1 AND used = 0;
+    `).get(email, verificationTokenHash) as any;
+
+    if (!row) return false;
+
+    this.sqlite.prepare('UPDATE registration_otps SET used = 1 WHERE id = ?;').run(row.id);
+    return true;
+  }
+
+  // --- Transactional Email Logs ---
+  public logEmail(recipient: string, type: string, status: string, provider: string, error?: string): void {
+    const id = `elog_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    this.sqlite.prepare(`
+      INSERT INTO email_logs (id, recipient, type, status, provider, error, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?);
+    `).run(id, recipient, type, status, provider, error || null, new Date().toISOString());
+  }
+
+  public getEmailLogs(limit = 100): any[] {
+    return this.sqlite.prepare(`
+      SELECT * FROM email_logs ORDER BY created_at DESC LIMIT ?;
+    `).all(limit) as any[];
   }
 }
 

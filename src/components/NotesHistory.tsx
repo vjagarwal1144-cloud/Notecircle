@@ -22,6 +22,8 @@ import { localDb } from '../services/localDb.ts';
 import { useAuth } from '../context/AuthContext.tsx';
 import { UserAvatar } from './UserAvatar.tsx';
 import type { Note, NoteTemplate } from '../types/index.ts';
+import { NeoSelect } from './NeoSelect.tsx';
+import { NeoCheckbox } from './NeoCheckbox.tsx';
 
 interface NotesHistoryProps {
   onOpenCreateNote: () => void;
@@ -778,48 +780,38 @@ export const NotesHistory: React.FC<NotesHistoryProps> = ({ onOpenCreateNote }) 
               />
             </div>
 
-            <div>
-              <label className="text-xs font-black uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1">Audience</label>
-              <select
-                value={editAudience}
-                onChange={(e) => setEditAudience(e.target.value as any)}
-                className="w-full text-xs font-bold p-3 neo-input text-stone-900 dark:text-stone-100"
-              >
-                <option value="followers">Approved Circle</option>
-                <option value="close_friends">Inner Circle Only</option>
-              </select>
-            </div>
+            <NeoSelect
+              id="edit-audience"
+              label="Audience"
+              value={editAudience}
+              onChange={(val) => setEditAudience(val as any)}
+              options={[
+                { value: 'followers', label: 'Approved Circle' },
+                { value: 'close_friends', label: 'Inner Circle Only' }
+              ]}
+            />
 
-            <div className="space-y-2 pt-2 border-t-2 border-stone-900 dark:border-stone-800">
-              <label className="flex items-center gap-2 text-xs font-bold text-stone-800 dark:text-stone-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={editPinned}
-                  onChange={(e) => setEditPinned(e.target.checked)}
-                  className="rounded text-amber-500 focus:ring-amber-500"
-                />
-                <span>Pin this note to the top</span>
-              </label>
+            <div className="space-y-3 pt-3 border-t-2 border-stone-900 dark:border-stone-800">
+              <NeoCheckbox
+                id="edit-pinned"
+                checked={editPinned}
+                onChange={(checked) => setEditPinned(checked)}
+                label="Pin this note to the top"
+              />
 
-              <label className="flex items-center gap-2 text-xs font-bold text-stone-800 dark:text-stone-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={editAllowReactions}
-                  onChange={(e) => setEditAllowReactions(e.target.checked)}
-                  className="rounded text-amber-500 focus:ring-amber-500"
-                />
-                <span>Allow reactions (❤️, 👍, etc.)</span>
-              </label>
+              <NeoCheckbox
+                id="edit-reactions"
+                checked={editAllowReactions}
+                onChange={(checked) => setEditAllowReactions(checked)}
+                label="Allow reactions (❤️, 👍, etc.)"
+              />
 
-              <label className="flex items-center gap-2 text-xs font-bold text-stone-800 dark:text-stone-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={editAllowReplies}
-                  onChange={(e) => setEditAllowReplies(e.target.checked)}
-                  className="rounded text-amber-500 focus:ring-amber-500"
-                />
-                <span>Allow private replies</span>
-              </label>
+              <NeoCheckbox
+                id="edit-replies"
+                checked={editAllowReplies}
+                onChange={(checked) => setEditAllowReplies(checked)}
+                label="Allow private replies"
+              />
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-3 border-t-2 border-stone-900 dark:border-stone-800">

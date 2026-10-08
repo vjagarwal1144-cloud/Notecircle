@@ -65,6 +65,33 @@ export const api = {
       body: JSON.stringify({ identifier, password })
     });
   },
+  async sendRegisterOtp(email: string) {
+    return request<{ success: boolean; message: string; email: string; expiresAt: string; cooldownUntil: string; emailConfigured: boolean }>('/api/auth/register/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+  },
+  async verifyRegisterOtp(email: string, otp: string) {
+    return request<{ success: boolean; message: string; verificationToken: string }>('/api/auth/register/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp })
+    });
+  },
+  async completeRegistration(data: {
+    email: string;
+    verificationToken: string;
+    username: string;
+    displayName: string;
+    password: string;
+    city?: string;
+    bio?: string;
+    avatarUrl?: string;
+  }) {
+    return request<{ token: string; user: User }>('/api/auth/register/complete', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
   async register(data: {
     username: string;
     displayName: string;

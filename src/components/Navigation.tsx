@@ -142,6 +142,17 @@ export const Navigation: React.FC<NavigationProps> = ({
               <Search className="w-3.5 h-3.5" />
               <span>Circle Finder</span>
             </button>
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'settings'
+                  ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_0px_#121217] font-black scale-[1.02]'
+                  : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white border-2 border-transparent'
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span>Settings</span>
+            </button>
             {currentUser?.isAdmin && (
               <button
                 onClick={() => setActiveTab('admin')}
@@ -199,7 +210,7 @@ export const Navigation: React.FC<NavigationProps> = ({
             {/* Notifications */}
             <button
               onClick={onOpenNotifications}
-              className="p-2 neo-btn text-stone-900 dark:text-stone-100 bg-white dark:bg-[#1A1A24] relative"
+              className="p-2 neo-btn text-stone-900 dark:text-stone-100 bg-white dark:bg-[#1A1A24] relative cursor-pointer"
               title="Notifications"
             >
               <Bell className="w-4 h-4" />
@@ -208,6 +219,20 @@ export const Navigation: React.FC<NavigationProps> = ({
                   {unreadNotifsCount > 9 ? '9+' : unreadNotifsCount}
                 </span>
               )}
+            </button>
+
+            {/* Prominent Settings Button */}
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`p-2 neo-btn transition-all cursor-pointer ${
+                activeTab === 'settings'
+                  ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]'
+                  : 'text-stone-900 dark:text-stone-100 bg-white dark:bg-[#1A1A24]'
+              }`}
+              title="Settings & Privacy"
+              aria-label="Settings"
+            >
+              <Settings className="w-4 h-4" />
             </button>
 
             {/* Post Note CTA */}
@@ -315,28 +340,30 @@ export const Navigation: React.FC<NavigationProps> = ({
         </div>
       </header>
 
-      {/* NoteCircle Floating Neo-Brutalist Cyber-Dock for Mobile Screens */}
+      {/* NoteCircle Floating Neo-Brutalist Cyber-Dock for Mobile Screens (EXACTLY 5 ITEMS) */}
       {!hideBottomNav && (
         <nav 
           aria-label="Mobile Navigation"
-          className="md:hidden fixed bottom-3 left-3 right-3 max-w-md mx-auto z-40 neo-dock px-2.5 py-2 pb-[calc(0.55rem+env(safe-area-inset-bottom,0px))] flex items-center justify-around transition-all"
+          className="md:hidden fixed bottom-3 left-3 right-3 max-w-md mx-auto z-40 neo-dock px-3 py-2 pb-[calc(0.55rem+env(safe-area-inset-bottom,0px))] grid grid-cols-5 items-center justify-items-center transition-all"
         >
+          {/* 1. Stream */}
           <button
             onClick={() => setActiveTab('feed')}
-            className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-2xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center justify-center w-full py-1.5 rounded-2xl transition-all cursor-pointer ${
               activeTab === 'feed'
                 ? 'bg-amber-400 text-stone-950 font-black scale-105 border-2 border-stone-950 shadow-[2px_2px_0px_#000]'
                 : 'text-stone-400 hover:text-white'
             }`}
-            aria-label="Feed"
+            aria-label="Feed Stream"
           >
             <Home className="w-5 h-5 stroke-[2.2]" />
-            <span className="text-[10px] font-black mt-0.5 tracking-tight">Stream</span>
+            <span className="text-[10px] font-black mt-0.5 tracking-tight font-display">Stream</span>
           </button>
 
+          {/* 2. Notes */}
           <button
             onClick={() => setActiveTab('notes')}
-            className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-2xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center justify-center w-full py-1.5 rounded-2xl transition-all cursor-pointer ${
               activeTab === 'notes'
                 ? 'bg-amber-400 text-stone-950 font-black scale-105 border-2 border-stone-950 shadow-[2px_2px_0px_#000]'
                 : 'text-stone-400 hover:text-white'
@@ -344,22 +371,23 @@ export const Navigation: React.FC<NavigationProps> = ({
             aria-label="My Notes"
           >
             <StickyNote className="w-5 h-5 stroke-[2.2]" />
-            <span className="text-[10px] font-black mt-0.5 tracking-tight">Notes</span>
+            <span className="text-[10px] font-black mt-0.5 tracking-tight font-display">Notes</span>
           </button>
 
-          {/* Center Elevated Action Button (Post Note) */}
+          {/* 3. Center Elevated Action Button (Post Note) */}
           <button
             onClick={onOpenCreateNote}
-            className="flex flex-col items-center justify-center p-2 rounded-2xl bg-gradient-to-tr from-amber-400 to-amber-300 text-stone-950 border-2.5 border-stone-950 shadow-[0_0_12px_rgba(255,184,0,0.4),2px_2px_0px_#000] -translate-y-2 hover:-translate-y-2.5 active:translate-y-0 transition-transform cursor-pointer"
+            className="flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-400 to-amber-300 text-stone-950 border-2.5 border-stone-950 shadow-[0_0_12px_rgba(255,184,0,0.4),2px_2px_0px_#000] -translate-y-2.5 hover:-translate-y-3 active:translate-y-0 transition-transform cursor-pointer"
             aria-label="Create Note"
             title="Create Note"
           >
-            <Plus className="w-5 h-5 stroke-[3]" />
+            <Plus className="w-6 h-6 stroke-[3]" />
           </button>
 
+          {/* 4. Chat */}
           <button
             onClick={() => setActiveTab('chat')}
-            className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-2xl transition-all relative cursor-pointer ${
+            className={`flex flex-col items-center justify-center w-full py-1.5 rounded-2xl transition-all relative cursor-pointer ${
               activeTab === 'chat'
                 ? 'bg-amber-400 text-stone-950 font-black scale-105 border-2 border-stone-950 shadow-[2px_2px_0px_#000]'
                 : 'text-stone-400 hover:text-white'
@@ -367,12 +395,13 @@ export const Navigation: React.FC<NavigationProps> = ({
             aria-label="Private Chat"
           >
             <MessageSquare className="w-5 h-5 stroke-[2.2]" />
-            <span className="text-[10px] font-black mt-0.5 tracking-tight">Chat</span>
+            <span className="text-[10px] font-black mt-0.5 tracking-tight font-display">Chat</span>
           </button>
 
+          {/* 5. Circle */}
           <button
             onClick={() => setActiveTab('connections')}
-            className={`flex flex-col items-center justify-center px-3 py-1.5 rounded-2xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center justify-center w-full py-1.5 rounded-2xl transition-all cursor-pointer ${
               activeTab === 'connections'
                 ? 'bg-amber-400 text-stone-950 font-black scale-105 border-2 border-stone-950 shadow-[2px_2px_0px_#000]'
                 : 'text-stone-400 hover:text-white'
@@ -380,7 +409,7 @@ export const Navigation: React.FC<NavigationProps> = ({
             aria-label="Search and Connections"
           >
             <Search className="w-5 h-5 stroke-[2.2]" />
-            <span className="text-[10px] font-black mt-0.5 tracking-tight">Circle</span>
+            <span className="text-[10px] font-black mt-0.5 tracking-tight font-display">Circle</span>
           </button>
         </nav>
       )}

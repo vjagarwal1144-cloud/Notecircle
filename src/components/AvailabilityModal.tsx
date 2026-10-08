@@ -3,6 +3,8 @@ import { X, Clock, Moon, Shield, Check } from 'lucide-react';
 import { api } from '../services/api.ts';
 import { useAuth } from '../context/AuthContext.tsx';
 import type { AvailabilityCode, UserAvailability } from '../types/index.ts';
+import { NeoSelect } from './NeoSelect.tsx';
+import { NeoCheckbox } from './NeoCheckbox.tsx';
 
 interface AvailabilityModalProps {
   isOpen: boolean;
@@ -225,39 +227,32 @@ export const AvailabilityModal: React.FC<AvailabilityModalProps> = ({ isOpen, on
           </div>
 
           {/* Duration */}
-          <div>
-            <label className="text-xs font-black text-stone-900 dark:text-stone-100 block mb-1">
-              Clear Status After
-            </label>
-            <select
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-              className="w-full text-xs p-2.5 neo-input text-stone-900 dark:text-stone-100 font-bold cursor-pointer"
-            >
-              <option value="1_hour">1 hour</option>
-              <option value="4_hours">4 hours</option>
-              <option value="8_hours">8 hours (Tonight)</option>
-              <option value="1_day">24 hours (Tomorrow)</option>
-              <option value="never">Don't clear automatically</option>
-            </select>
-          </div>
+          <NeoSelect
+            id="avail-duration"
+            label="Clear Status After"
+            value={duration}
+            onChange={(val) => setDuration(val)}
+            options={[
+              { value: '1_hour', label: '1 hour' },
+              { value: '4_hours', label: '4 hours' },
+              { value: '8_hours', label: '8 hours (Tonight)' },
+              { value: '1_day', label: '24 hours (Tomorrow)' },
+              { value: 'never', label: "Don't clear automatically" }
+            ]}
+          />
 
           {/* Strict DND toggle */}
-          <div className="p-3 bg-amber-50 dark:bg-stone-850 border-2 border-stone-900 dark:border-stone-200 rounded-2xl flex items-start gap-2.5 shadow-[2px_2px_0px_0px_#18181b]">
-            <Moon className="w-4 h-4 text-amber-800 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="p-3 bg-amber-50 dark:bg-[#181824] border-2 border-stone-900 dark:border-stone-700 rounded-2xl flex items-start gap-3 shadow-[2.5px_2.5px_0px_#121217]">
+            <Moon className="w-5 h-5 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5 stroke-[2.5]" />
             <div className="flex-1">
-              <label className="text-xs font-black text-stone-950 dark:text-stone-100 flex items-center justify-between cursor-pointer">
-                <span>Enable Strict DND Mode</span>
-                <input
-                  type="checkbox"
-                  checked={strictDnd}
-                  onChange={(e) => setStrictDnd(e.target.checked)}
-                  className="w-4 h-4 rounded-md border-2 border-stone-900 text-amber-600 focus:ring-amber-500 cursor-pointer"
-                />
-              </label>
-              <p className="text-[11px] text-stone-600 dark:text-stone-400 mt-1 leading-snug">
-                When checked, incoming direct messages are blocked until this status expires.
-              </p>
+              <NeoCheckbox
+                id="strict-dnd"
+                checked={strictDnd}
+                onChange={(checked) => setStrictDnd(checked)}
+                label="Enable Strict DND Mode"
+                description="When checked, incoming direct messages are blocked until this status expires."
+                className="w-full justify-between flex-row-reverse"
+              />
             </div>
           </div>
 

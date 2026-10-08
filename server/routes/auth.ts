@@ -1,9 +1,24 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
 import { db, hashPassword, verifyPassword, generateToken, parseToken } from '../db.ts';
+import { 
+  sendRegistrationOtpEmail, 
+  sendWelcomeEmail, 
+  sendPasswordRecoveryEmail, 
+  sendAdminNewUserAlert,
+  sendSecurityAlertEmail 
+} from '../email.ts';
 import type { User } from '../../src/types/index.ts';
 
 export const authRouter = Router();
+
+function hashOtp(otp: string): string {
+  return crypto.createHash('sha256').update(`nc_otp_salt_${otp.trim()}`).digest('hex');
+}
+
+function hashVerificationToken(token: string): string {
+  return crypto.createHash('sha256').update(`nc_verif_salt_${token.trim()}`).digest('hex');
+}
 
 // Middleware to extract authenticated user & validate active server-side session
 // Supports both HttpOnly Secure Cookie (browser) and Bearer header (REST API / Mobile / CLI)
@@ -94,12 +109,128 @@ authRouter.post('/login', (req, res) => {
   return res.json({ token, user });
 });
 
-// POST /api/auth/register
-authRouter.post('/register', (req, res) => {
-  const { username, displayName, email, phone, password, city, bio, deviceName } = req.body;
+// POST /api/auth/register/send-otp
+// Step 1: Send cryptographically secure random 6-digit OTP to user's real email address
+authRouter.post('/register/send-otp', async (req, res) => {
+  const { email } = req.body;
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({ error: 'Valid email address is required' });
+  }
 
-  if (!username || !displayName || (!email && !phone) || !password) {
-    return res.status(400).json({ error: 'Username, display name, email/phone and password are required' });
+  const cleanEmail = email.trim().toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(cleanEmail)) {
+    return res.status(400).json({ error: 'Please enter a valid email address (e.g. name@domain.com)' });
+  }
+
+  // Duplicate account protection
+  const existingUser = db.get('users').find((u) => u.email && u.email.toLowerCase() === cleanEmail);
+  if (existingUser) {
+    return res.status(409).json({ error: 'An account is already registered with this email address. Please sign in.' });
+  }
+
+  // Rate limiting / resend cooldown check (60 seconds)
+  const cooldown = db.checkEmailCooldown(cleanEmail);
+  if (cooldown.inCooldown) {
+    return res.status(429).json({
+      error: `Please wait ${cooldown.secondsRemaining} seconds before requesting a new code.`,
+      retryAfter: cooldown.secondsRemaining
+    });
+  }
+
+  // Cryptographically secure random 6-digit OTP
+  const otp = crypto.randomInt(100000, 1000000).toString();
+  const otpHash = hashOtp(otp);
+
+  const otpRecord = db.createRegistrationOtp(cleanEmail, otpHash, 10, 60);
+
+  // Dispatch real transactional email
+  const emailRes = await sendRegistrationOtpEmail(cleanEmail, otp, 10);
+
+  // Requirement 6: NEVER expose OTP through API response, logs, or client payload
+  return res.json({
+    success: true,
+    message: emailRes.configured 
+      ? 'Verification code sent to your email.'
+      : 'Verification code generated. (Configure SMTP environment variables for production email delivery).',
+    email: cleanEmail,
+    expiresAt: otpRecord.expiresAt,
+    cooldownUntil: otpRecord.cooldownUntil,
+    emailConfigured: emailRes.configured
+  });
+});
+
+// POST /api/auth/register/verify-otp
+// Step 2: Verify the 6-digit OTP and return a secure single-use verification token
+authRouter.post('/register/verify-otp', (req, res) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) {
+    return res.status(400).json({ error: 'Email and 6-digit verification code are required' });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanOtp = String(otp).trim();
+
+  const record = db.getLatestRegistrationOtp(cleanEmail);
+  if (!record) {
+    return res.status(404).json({ error: 'No active verification code found for this email. Please request a new code.' });
+  }
+
+  if (new Date(record.expires_at).getTime() < Date.now()) {
+    return res.status(400).json({ error: 'Verification code has expired. Please request a fresh code.' });
+  }
+
+  if (record.attempts >= record.max_attempts) {
+    return res.status(429).json({ error: 'Maximum verification attempts exceeded. Please request a new code.' });
+  }
+
+  const currentAttempts = db.incrementOtpAttempts(record.id);
+  const incomingHash = hashOtp(cleanOtp);
+
+  let match = false;
+  try {
+    match = crypto.timingSafeEqual(
+      Buffer.from(incomingHash, 'hex'),
+      Buffer.from(record.otp_hash, 'hex')
+    );
+  } catch {
+    match = false;
+  }
+
+  if (!match) {
+    const remaining = Math.max(0, record.max_attempts - currentAttempts);
+    return res.status(400).json({
+      error: `Invalid verification code. ${remaining} attempt(s) remaining.`,
+      attemptsRemaining: remaining
+    });
+  }
+
+  // Generate single-use verification token
+  const verificationToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = hashVerificationToken(verificationToken);
+  db.markRegistrationOtpVerified(record.id, tokenHash);
+
+  return res.json({
+    success: true,
+    message: 'Email verified successfully.',
+    verificationToken
+  });
+});
+
+// POST /api/auth/register/complete
+// Step 3: Consume single-use token and activate the new account
+authRouter.post('/register/complete', async (req, res) => {
+  const { email, verificationToken, username, displayName, password, bio, city, avatarUrl, deviceName } = req.body;
+  if (!email || !verificationToken || !username || !displayName || !password) {
+    return res.status(400).json({ error: 'Email, verification token, username, display name, and password are required' });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  const tokenHash = hashVerificationToken(verificationToken);
+
+  const consumed = db.consumeRegistrationOtp(cleanEmail, tokenHash);
+  if (!consumed) {
+    return res.status(403).json({ error: 'Invalid, expired, or already-used verification token. Please verify your email again.' });
   }
 
   if (password.length < 8) {
@@ -107,17 +238,16 @@ authRouter.post('/register', (req, res) => {
   }
 
   const cleanUsername = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-  if (cleanUsername.length < 3) {
-    return res.status(400).json({ error: 'Username must be at least 3 characters alphanumeric/underscore.' });
+  if (cleanUsername.length < 3 || cleanUsername.length > 24) {
+    return res.status(400).json({ error: 'Username must be 3-24 characters (alphanumeric and underscore only).' });
   }
 
   const users = db.get('users');
   if (users.some((u) => u.username.toLowerCase() === cleanUsername)) {
-    return res.status(409).json({ error: 'Username is already taken' });
+    return res.status(409).json({ error: 'Username @' + cleanUsername + ' is already taken.' });
   }
-
-  if (email && users.some((u) => u.email && u.email.toLowerCase() === email.trim().toLowerCase())) {
-    return res.status(409).json({ error: 'Email is already registered' });
+  if (users.some((u) => u.email && u.email.toLowerCase() === cleanEmail)) {
+    return res.status(409).json({ error: 'Email is already registered.' });
   }
 
   const defaultAvatars = [
@@ -127,13 +257,16 @@ authRouter.post('/register', (req, res) => {
     'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=256&h=256&q=80'
   ];
 
+  const chosenAvatar = avatarUrl && avatarUrl.trim()
+    ? avatarUrl.trim()
+    : defaultAvatars[Math.floor(Math.random() * defaultAvatars.length)];
+
   const newUser: User = {
     id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     username: cleanUsername,
     displayName: displayName.trim(),
-    email: email ? email.trim().toLowerCase() : `${cleanUsername}@notecircle.app`,
-    phone: phone ? phone.trim() : undefined,
-    avatarUrl: defaultAvatars[Math.floor(Math.random() * defaultAvatars.length)],
+    email: cleanEmail,
+    avatarUrl: chosenAvatar,
     bio: bio ? bio.trim() : '',
     city: city ? city.trim() : undefined,
     isPrivate: true,
@@ -174,7 +307,6 @@ authRouter.post('/register', (req, res) => {
   };
 
   (newUser as any).passwordHash = hashPassword(password);
-
   db.update('users', (curr) => [...curr, newUser]);
 
   const token = generateToken(newUser.id);
@@ -182,7 +314,11 @@ authRouter.post('/register', (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
 
   db.createSession(newUser.id, token, device, ip);
-  db.logAudit(newUser.id, newUser.username, 'REGISTER_SUCCESS', `New account created: @${newUser.username}`);
+  db.logAudit(newUser.id, newUser.username, 'REGISTER_EMAIL_VERIFIED', `Activated with email: ${cleanEmail}`);
+
+  // Send Welcome Email and Admin Alert
+  sendWelcomeEmail(cleanEmail, newUser.displayName, newUser.username).catch(() => {});
+  sendAdminNewUserAlert(newUser).catch(() => {});
 
   // Set secure HttpOnly session cookie
   res.cookie('nc_session_token', token, {
@@ -194,6 +330,13 @@ authRouter.post('/register', (req, res) => {
   });
 
   return res.status(201).json({ token, user: newUser });
+});
+
+// Legacy / Direct register endpoint protection: requires verification
+authRouter.post('/register', (req, res) => {
+  return res.status(400).json({
+    error: 'Direct unverified registration is disabled. Please verify your email using /api/auth/register/send-otp.'
+  });
 });
 
 // POST /api/auth/logout
@@ -263,8 +406,12 @@ authRouter.post('/forgot-password', (req, res) => {
   db.createPasswordRecovery(user.id, codeHash, 15);
   db.logAudit(user.id, user.username, 'PASSWORD_RECOVERY_REQUESTED', 'Recovery OTP generated and dispatched');
 
-  // In development/test runtime, we print OTP to secure system console rather than leaking in API response
-  console.log(`[AUTH RECOVERY DISPATCH] OTP for user @${user.username} (${user.email}): ${rawOtp}`);
+  // Dispatch real transactional password recovery email if user has email
+  if (user.email) {
+    sendPasswordRecoveryEmail(user.email, rawOtp).catch((err) => {
+      console.error('[AUTH RECOVERY] Failed to send recovery email:', err.message);
+    });
+  }
 
   return res.json({
     success: true,

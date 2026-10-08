@@ -99,7 +99,21 @@ usersRouter.put('/me', (req, res) => {
   const viewer = getAuthUser(req);
   if (!viewer) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { displayName, bio, city, birthday, workplace, avatarUrl } = req.body;
+  const { displayName, username, bio, city, birthday, workplace, avatarUrl } = req.body;
+
+  let newUsername = viewer.username;
+  if (username !== undefined) {
+    const cleanU = String(username).trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+    if (cleanU.length < 3 || cleanU.length > 24) {
+      return res.status(400).json({ error: 'Username must be 3-24 characters (alphanumeric and underscore only)' });
+    }
+    const allUsers = db.get('users');
+    const taken = allUsers.some((u) => u.id !== viewer.id && u.username.toLowerCase() === cleanU);
+    if (taken) {
+      return res.status(409).json({ error: `Username @${cleanU} is already taken by another user.` });
+    }
+    newUsername = cleanU;
+  }
 
   let updatedUser = viewer;
   db.update('users', (users) =>
@@ -107,6 +121,7 @@ usersRouter.put('/me', (req, res) => {
       if (u.id === viewer.id) {
         updatedUser = {
           ...u,
+          username: newUsername,
           displayName: displayName !== undefined ? displayName.trim() : u.displayName,
           bio: bio !== undefined ? bio.trim() : u.bio,
           city: city !== undefined ? city.trim() : u.city,
@@ -119,6 +134,8 @@ usersRouter.put('/me', (req, res) => {
       return u;
     })
   );
+
+  db.logAudit(viewer.id, updatedUser.username, 'PROFILE_UPDATED', `Display name: ${updatedUser.displayName}, handle: @${updatedUser.username}`);
 
   return res.json({ user: updatedUser });
 });

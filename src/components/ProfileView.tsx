@@ -39,10 +39,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   // Edit fields
   const [editName, setEditName] = useState('');
+  const [editUsername, setEditUsername] = useState('');
+  const [editAvatarUrl, setEditAvatarUrl] = useState('');
   const [editBio, setEditBio] = useState('');
   const [editCity, setEditCity] = useState('');
   const [editWorkplace, setEditWorkplace] = useState('');
   const [editBirthday, setEditBirthday] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const fetchProfile = async () => {
@@ -52,6 +55,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       setProfile(res.profile);
       if (isSelf) {
         setEditName(res.profile.displayName);
+        setEditUsername(res.profile.username);
+        setEditAvatarUrl(res.profile.avatarUrl || '');
         setEditBio(res.profile.bio || '');
         setEditCity(res.profile.city || '');
         setEditWorkplace(res.profile.workplace || '');
@@ -70,9 +75,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSaving(true);
+    setNotice(null);
     try {
       await api.updateProfile({
         displayName: editName,
+        username: editUsername,
+        avatarUrl: editAvatarUrl,
         bio: editBio,
         city: editCity,
         workplace: editWorkplace,
@@ -84,6 +93,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       setNotice({ type: 'success', text: 'Profile updated successfully.' });
     } catch (err: any) {
       setNotice({ type: 'error', text: err.message || 'Failed to update profile' });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -339,70 +350,139 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
       {/* Edit Profile Modal */}
       {isEditing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/70 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/75 backdrop-blur-xs">
           <form
             onSubmit={handleSaveProfile}
-            className="neo-card bg-white dark:bg-[#161622] w-full max-w-md rounded-3xl shadow-[6px_6px_0px_#121217] p-6 space-y-4"
+            className="neo-card bg-white dark:bg-[#161622] w-full max-w-lg rounded-3xl shadow-[6px_6px_0px_#121217] dark:shadow-[6px_6px_0px_#000] p-6 space-y-4 max-h-[90vh] overflow-y-auto border-[3px] border-stone-950 dark:border-stone-700"
           >
-            <h3 className="text-sm font-black text-stone-900 dark:text-stone-100 uppercase tracking-wide border-b-2 border-stone-900 dark:border-stone-800 pb-2">
-              Edit Your Profile
-            </h3>
+            <div className="flex items-center justify-between border-b-2 border-stone-950 dark:border-stone-800 pb-2">
+              <h3 className="text-sm font-black text-stone-950 dark:text-stone-100 uppercase tracking-wide font-display">
+                Edit Your Profile
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="text-xs font-black text-stone-500 hover:text-stone-950 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
 
+            {/* Avatar Selector */}
             <div>
-              <label className="text-xs font-black uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1">Display Name</label>
-              <input
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className="w-full text-xs font-bold p-3 neo-input text-stone-900 dark:text-stone-100"
-                required
-              />
+              <label className="text-xs font-black uppercase tracking-wider text-stone-950 dark:text-stone-300 block mb-1.5 font-display">
+                Avatar Photo
+              </label>
+              <div className="flex items-center gap-3">
+                <img
+                  src={editAvatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80'}
+                  alt="Avatar preview"
+                  className="w-12 h-12 rounded-full border-2 border-stone-950 object-cover shadow-[2px_2px_0px_#121217]"
+                />
+                <input
+                  type="url"
+                  value={editAvatarUrl}
+                  onChange={(e) => setEditAvatarUrl(e.target.value)}
+                  placeholder="Paste image URL (https://...)"
+                  className="flex-1 text-xs font-bold p-2.5 neo-input text-stone-950 dark:text-stone-100"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-black uppercase tracking-wider text-stone-950 dark:text-stone-300 block mb-1 font-display">
+                  Display Name
+                </label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full text-xs font-bold p-2.5 neo-input text-stone-950 dark:text-stone-100"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-black uppercase tracking-wider text-stone-950 dark:text-stone-300 block mb-1 font-display">
+                  Username (@)
+                </label>
+                <input
+                  type="text"
+                  value={editUsername}
+                  onChange={(e) => setEditUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  className="w-full text-xs font-bold p-2.5 neo-input text-stone-950 dark:text-stone-100"
+                  required
+                />
+              </div>
             </div>
 
             <div>
-              <label className="text-xs font-black uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1">Bio</label>
+              <label className="text-xs font-black uppercase tracking-wider text-stone-950 dark:text-stone-300 block mb-1 font-display">
+                Bio & Status
+              </label>
               <textarea
                 value={editBio}
                 onChange={(e) => setEditBio(e.target.value)}
                 rows={3}
-                className="w-full text-xs font-bold p-3 neo-input text-stone-900 dark:text-stone-100 resize-none"
+                placeholder="What are you about? Private to your circle."
+                className="w-full text-xs font-bold p-3 neo-input text-stone-950 dark:text-stone-100 resize-none"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <div>
-                <label className="text-xs font-black uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1">City</label>
+                <label className="text-xs font-black uppercase tracking-wider text-stone-950 dark:text-stone-300 block mb-1 font-display">
+                  City
+                </label>
                 <input
                   type="text"
                   value={editCity}
                   onChange={(e) => setEditCity(e.target.value)}
-                  className="w-full text-xs font-bold p-2.5 neo-input text-stone-900 dark:text-stone-100"
+                  placeholder="e.g. London, UK"
+                  className="w-full text-xs font-bold p-2.5 neo-input text-stone-950 dark:text-stone-100"
                 />
               </div>
               <div>
-                <label className="text-xs font-black uppercase tracking-wider text-stone-700 dark:text-stone-300 block mb-1">Workplace</label>
+                <label className="text-xs font-black uppercase tracking-wider text-stone-950 dark:text-stone-300 block mb-1 font-display">
+                  Workplace
+                </label>
                 <input
                   type="text"
                   value={editWorkplace}
                   onChange={(e) => setEditWorkplace(e.target.value)}
-                  className="w-full text-xs font-bold p-2.5 neo-input text-stone-900 dark:text-stone-100"
+                  placeholder="e.g. Design Studio"
+                  className="w-full text-xs font-bold p-2.5 neo-input text-stone-950 dark:text-stone-100"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-black uppercase tracking-wider text-stone-950 dark:text-stone-300 block mb-1 font-display">
+                  Birthday
+                </label>
+                <input
+                  type="text"
+                  value={editBirthday}
+                  onChange={(e) => setEditBirthday(e.target.value)}
+                  placeholder="YYYY-MM-DD"
+                  className="w-full text-xs font-bold p-2.5 neo-input text-stone-950 dark:text-stone-100"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t-2 border-stone-900 dark:border-stone-800">
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t-2 border-stone-950 dark:border-stone-800">
               <button
                 type="button"
                 onClick={() => setIsEditing(false)}
-                className="px-3.5 py-2 text-xs font-bold text-stone-600 dark:text-stone-400 hover:underline cursor-pointer"
+                className="px-4 py-2 text-xs font-bold text-stone-600 dark:text-stone-400 hover:underline cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 neo-btn-primary text-stone-950 rounded-xl text-xs font-black cursor-pointer"
+                disabled={isSaving}
+                className="px-5 py-2.5 neo-btn-primary text-stone-950 rounded-xl text-xs font-black cursor-pointer shadow-[3px_3px_0px_#121217] disabled:opacity-50"
               >
-                Save Changes
+                {isSaving ? 'Saving Changes...' : 'Save Changes'}
               </button>
             </div>
           </form>

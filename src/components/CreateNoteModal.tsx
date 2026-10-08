@@ -3,6 +3,8 @@ import { X, Clock, Users, Sparkles, MessageCircle, Heart, Shield, Calendar, Pin,
 import { api } from '../services/api.ts';
 import { localDb } from '../services/localDb.ts';
 import type { NoteCategory, PrivacyAudience } from '../types/index.ts';
+import { NeoSelect } from './NeoSelect.tsx';
+import { NeoCheckbox } from './NeoCheckbox.tsx';
 
 interface CreateNoteModalProps {
   isOpen: boolean;
@@ -291,31 +293,26 @@ export const CreateNoteModal: React.FC<CreateNoteModalProps> = ({
 
           {/* Expiration Settings & Optional Schedule */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-black text-stone-900 dark:text-stone-100 flex items-center gap-1.5 mb-1.5">
-                <Clock className="w-3.5 h-3.5 text-stone-600 dark:text-stone-400" />
-                <span>Expires After</span>
-              </label>
-              <select
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-                className="w-full text-xs font-bold p-2.5 neo-input text-stone-900 dark:text-stone-100 cursor-pointer"
-              >
-                <option value="1_hour">1 hour</option>
-                <option value="3_hours">3 hours</option>
-                <option value="6_hours">6 hours</option>
-                <option value="12_hours">12 hours</option>
-                <option value="1_day">1 day (24 hours)</option>
-                <option value="3_days">3 days</option>
-                <option value="1_week">1 week</option>
-                <option value="never">Never (Until replaced)</option>
-              </select>
-            </div>
+            <NeoSelect
+              id="note-duration"
+              label="Expires After"
+              value={duration}
+              onChange={(val) => setDuration(val)}
+              options={[
+                { value: '1_hour', label: '1 hour' },
+                { value: '3_hours', label: '3 hours' },
+                { value: '6_hours', label: '6 hours' },
+                { value: '12_hours', label: '12 hours' },
+                { value: '1_day', label: '1 day (24 hours)' },
+                { value: '3_days', label: '3 days' },
+                { value: '1_week', label: '1 week' },
+                { value: 'never', label: 'Never (Until replaced)' }
+              ]}
+            />
 
             <div>
-              <label className="text-xs font-black text-stone-900 dark:text-stone-100 flex items-center gap-1.5 mb-1.5">
-                <Calendar className="w-3.5 h-3.5 text-stone-600 dark:text-stone-400" />
-                <span>Schedule Later</span>
+              <label className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-stone-900 dark:text-stone-200 block mb-1.5 font-display">
+                Schedule Later (Optional)
               </label>
               <input
                 type="datetime-local"
@@ -332,48 +329,33 @@ export const CreateNoteModal: React.FC<CreateNoteModalProps> = ({
               <Lock className="w-4 h-4 text-amber-600" />
               <span>Circle Privacy Guard:</span>
             </div>
-            <span className="text-stone-900 dark:text-stone-100">
+            <span className="text-stone-900 dark:text-stone-100 font-bold">
               {audience === 'close_friends' ? 'Close Friends Only' : 'Circle Only'} · {duration.replace('_', ' ')}
             </span>
           </div>
 
           {/* Interaction Toggles */}
-          <div className="pt-2 border-t-2 border-stone-100 dark:border-stone-800 flex flex-wrap items-center justify-between text-xs font-black text-stone-800 dark:text-stone-200 gap-3">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={allowReplies}
-                onChange={(e) => setAllowReplies(e.target.checked)}
-                className="w-4 h-4 rounded-md border-2 border-stone-900 text-amber-500 cursor-pointer"
-              />
-              <span className="flex items-center gap-1">
-                <MessageCircle className="w-3.5 h-3.5" /> Allow replies
-              </span>
-            </label>
+          <div className="pt-3 border-t-2 border-stone-900 dark:border-stone-800 flex flex-wrap items-center justify-between text-xs font-black text-stone-800 dark:text-stone-200 gap-3">
+            <NeoCheckbox
+              id="note-allow-replies"
+              checked={allowReplies}
+              onChange={(checked) => setAllowReplies(checked)}
+              label={<span className="flex items-center gap-1 font-black"><MessageCircle className="w-3.5 h-3.5 stroke-[2.5]" /> Allow replies</span>}
+            />
 
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={allowReactions}
-                onChange={(e) => setAllowReactions(e.target.checked)}
-                className="w-4 h-4 rounded-md border-2 border-stone-900 text-amber-500 cursor-pointer"
-              />
-              <span className="flex items-center gap-1">
-                <Heart className="w-3.5 h-3.5" /> Allow reactions
-              </span>
-            </label>
+            <NeoCheckbox
+              id="note-allow-reactions"
+              checked={allowReactions}
+              onChange={(checked) => setAllowReactions(checked)}
+              label={<span className="flex items-center gap-1 font-black"><Heart className="w-3.5 h-3.5 stroke-[2.5]" /> Allow reactions</span>}
+            />
 
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={isPinned}
-                onChange={(e) => setIsPinned(e.target.checked)}
-                className="w-4 h-4 rounded-md border-2 border-stone-900 text-amber-500 cursor-pointer"
-              />
-              <span className="flex items-center gap-1">
-                <Pin className="w-3.5 h-3.5" /> Pin note
-              </span>
-            </label>
+            <NeoCheckbox
+              id="note-is-pinned"
+              checked={isPinned}
+              onChange={(checked) => setIsPinned(checked)}
+              label={<span className="flex items-center gap-1 font-black"><Pin className="w-3.5 h-3.5 stroke-[2.5]" /> Pin note</span>}
+            />
           </div>
         </div>
 

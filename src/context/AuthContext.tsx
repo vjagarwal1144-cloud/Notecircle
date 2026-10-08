@@ -11,6 +11,7 @@ interface AuthContextType {
   toggleDarkMode: () => void;
   login: (identifier: string, pass: string) => Promise<void>;
   register: (data: any) => Promise<void>;
+  completeRegistration: (data: any) => Promise<any>;
   logout: () => Promise<void>;
   unreadNotifsCount: number;
   refreshNotifications: () => Promise<void>;
@@ -209,6 +210,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const completeRegistration = async (data: any) => {
+    setIsLoading(true);
+    try {
+      const res = await api.completeRegistration(data);
+      setStoredToken(res.token);
+      setCurrentUser(res.user);
+      return res;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const logout = async () => {
     try {
       await api.logout();
@@ -237,6 +250,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toggleDarkMode,
         login,
         register,
+        completeRegistration,
         logout,
         unreadNotifsCount,
         refreshNotifications,

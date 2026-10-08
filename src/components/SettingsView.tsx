@@ -16,7 +16,8 @@ import {
   Palette,
   HelpCircle,
   Trash2,
-  UserX
+  UserX,
+  User
 } from 'lucide-react';
 import { api } from '../services/api.ts';
 import { localDb } from '../services/localDb.ts';
@@ -28,6 +29,8 @@ import {
   type DeviceCryptoIdentity 
 } from '../services/crypto.ts';
 import type { UserPrivacySettings, NotificationSettings } from '../types/index.ts';
+import { NeoSelect } from './NeoSelect.tsx';
+import { NeoCheckbox } from './NeoCheckbox.tsx';
 
 interface SettingsViewProps {
   onOpenSupport?: () => void;
@@ -337,89 +340,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
       
-      {/* Settings Navigation Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 p-1.5 bg-stone-100 dark:bg-[#12121A] border-2 border-stone-900 dark:border-stone-750 rounded-2xl shadow-[2px_2px_0px_#121217] text-xs font-black scrollbar-none">
-        <button
-          onClick={() => setActiveSection('account')}
-          className={`px-3.5 py-2 rounded-xl uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
-            activeSection === 'account' 
-              ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' 
-              : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white'
-          }`}
-        >
-          Account
-        </button>
-
-        <button
-          onClick={() => setActiveSection('appearance')}
-          className={`px-3.5 py-2 rounded-xl uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
-            activeSection === 'appearance' 
-              ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' 
-              : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white'
-          }`}
-        >
-          <Palette className="w-3.5 h-3.5 stroke-[2.5]" />
-          <span>Appearance</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSection('privacy')}
-          className={`px-3.5 py-2 rounded-xl uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
-            activeSection === 'privacy' 
-              ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' 
-              : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white'
-          }`}
-        >
-          Privacy
-        </button>
-
-        <button
-          onClick={() => setActiveSection('security')}
-          className={`px-3.5 py-2 rounded-xl uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
-            activeSection === 'security' 
-              ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' 
-              : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white'
-          }`}
-        >
-          Security
-        </button>
-
-        <button
-          onClick={() => setActiveSection('notifications')}
-          className={`px-3.5 py-2 rounded-xl uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
-            activeSection === 'notifications' 
-              ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' 
-              : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white'
-          }`}
-        >
-          Alerts
-        </button>
-
-        <button
-          onClick={() => setActiveSection('data')}
-          className={`px-3.5 py-2 rounded-xl uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
-            activeSection === 'data' 
-              ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' 
-              : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white'
-          }`}
-        >
-          Storage
-        </button>
-
-        <button
-          onClick={() => setActiveSection('android')}
-          className={`px-3.5 py-2 rounded-xl uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
-            activeSection === 'android' 
-              ? 'bg-amber-400 text-stone-950 border-2 border-stone-900 shadow-[2px_2px_0px_#121217]' 
-              : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-white'
-          }`}
-        >
-          Android Stack
-        </button>
+      {/* Settings Segmented Navigation Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 p-1.5 bg-[#FAF7F0] dark:bg-[#12121A] border-[3px] border-stone-950 dark:border-stone-750 rounded-2xl shadow-[3px_3px_0px_#121217] dark:shadow-[3px_3px_0px_#000] text-xs font-black scrollbar-none">
+        {[
+          { id: 'account', label: 'Account', icon: User },
+          { id: 'appearance', label: 'Appearance', icon: Palette },
+          { id: 'privacy', label: 'Privacy', icon: Shield },
+          { id: 'security', label: 'Security', icon: Lock },
+          { id: 'notifications', label: 'Alerts', icon: Bell },
+          { id: 'data', label: 'Storage', icon: Database },
+          { id: 'android', label: 'Android Stack', icon: Smartphone }
+        ].map((tab) => {
+          const isActive = activeSection === tab.id;
+          const IconComp = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveSection(tab.id as any)}
+              className={`h-10 px-4 rounded-xl uppercase tracking-wider font-display font-black text-xs transition-all whitespace-nowrap shrink-0 flex items-center gap-2 cursor-pointer ${
+                isActive
+                  ? 'bg-amber-400 text-stone-950 border-[2.5px] border-stone-950 shadow-[2px_2px_0px_#121217]'
+                  : 'bg-white dark:bg-[#1A1A26] text-stone-700 dark:text-stone-300 border-[2.5px] border-stone-950/20 dark:border-stone-750 hover:border-stone-950 dark:hover:border-stone-500 hover:text-stone-950 dark:hover:text-white'
+              }`}
+            >
+              <IconComp className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {inlineNotice && (
-        <div className={`p-3.5 text-xs font-bold rounded-2xl border-2 border-stone-900 flex items-center justify-between shadow-[2px_2px_0px_#121217] ${
+        <div className={`p-3.5 text-xs font-bold rounded-2xl border-[2.5px] border-stone-950 flex items-center justify-between shadow-[2px_2px_0px_#121217] ${
           inlineNotice.type === 'success' 
             ? 'bg-amber-200 dark:bg-amber-950/60 text-stone-950 dark:text-amber-200' 
             : 'bg-rose-200 dark:bg-rose-950/60 text-stone-950 dark:text-rose-200'
@@ -438,78 +390,132 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
       {/* Section 0: Appearance / Theme */}
       {activeSection === 'appearance' && (
         <div className="space-y-4">
-          <div className="neo-card rounded-3xl p-6 shadow-[5px_5px_0px_#121217] space-y-4 bg-white dark:bg-[#161622]">
-            <div className="border-b-2 border-stone-900 dark:border-stone-800 pb-3">
-              <h3 className="text-sm font-black text-stone-950 dark:text-stone-50 uppercase tracking-wide flex items-center gap-2">
-                <Palette className="w-4 h-4 stroke-[2.5]" />
+          <div className="neo-card rounded-3xl p-5 sm:p-6 shadow-[5px_5px_0px_#121217] dark:shadow-[5px_5px_0px_#000] space-y-5 bg-white dark:bg-[#161622] border-[3px] border-stone-950 dark:border-stone-700">
+            <div className="border-b-[2.5px] border-stone-950 dark:border-stone-800 pb-3">
+              <h3 className="text-sm font-black text-stone-950 dark:text-stone-50 uppercase tracking-wide flex items-center gap-2 font-display">
+                <Palette className="w-4 h-4 stroke-[2.5] text-amber-500" />
                 <span>NoteCircle Visual Theme</span>
               </h3>
-              <p className="text-xs font-bold text-stone-500 mt-0.5">
-                Bold Neo-Brutalist design language with high contrast, tactile physics, and raw surfaces.
+              <p className="text-xs font-bold text-stone-600 dark:text-stone-400 mt-0.5">
+                Switch between high-contrast daylight cream canvas and deep obsidian neo-night.
               </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-              {/* Light Theme Card */}
+              {/* Theme Card A: Warm Cream Canvas */}
               <button
                 type="button"
                 onClick={() => isDarkMode && toggleDarkMode()}
-                className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                className={`p-5 rounded-3xl border-[3px] text-left transition-all cursor-pointer relative group flex flex-col justify-between ${
                   !isDarkMode 
-                    ? 'border-stone-900 bg-amber-200 shadow-[4px_4px_0px_#121217]' 
-                    : 'border-stone-900/30 dark:border-stone-750 bg-stone-100 dark:bg-[#1A1A28] opacity-70 hover:opacity-100'
+                    ? 'border-stone-950 bg-[#FAF7F0] shadow-[5px_5px_0px_#121217] ring-2 ring-amber-400' 
+                    : 'border-stone-950/30 dark:border-stone-750 bg-stone-50 dark:bg-[#15141E] opacity-75 hover:opacity-100 hover:border-stone-950 shadow-[3px_3px_0px_#121217] dark:shadow-[3px_3px_0px_#000]'
                 }`}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Sun className="w-5 h-5 text-stone-950 stroke-[2.5]" />
-                    <span className="text-xs font-black text-stone-950 dark:text-stone-100">Warm Cream Canvas</span>
+                <div>
+                  {/* Card Header & Selected Indicator */}
+                  <div className="flex items-center justify-between mb-3.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-xl bg-amber-300 text-stone-950 border-2 border-stone-950 flex items-center justify-center shadow-[2px_2px_0px_#121217]">
+                        <Sun className="w-5 h-5 stroke-[2.5]" />
+                      </div>
+                      <div>
+                        <span className="text-sm font-black text-stone-950 block font-display">Warm Cream Canvas</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-700">Daylight Mode</span>
+                      </div>
+                    </div>
+                    {!isDarkMode ? (
+                      <span className="text-xs bg-amber-400 text-stone-950 font-black px-3 py-1 rounded-xl border-2 border-stone-950 flex items-center gap-1 shadow-[2px_2px_0px_#121217]">
+                        <Check className="w-3.5 h-3.5 stroke-[3.5]" /> Active
+                      </span>
+                    ) : (
+                      <span className="text-[11px] bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 font-bold px-2.5 py-1 rounded-xl border border-stone-400 dark:border-stone-700 group-hover:border-stone-950">
+                        Select
+                      </span>
+                    )}
                   </div>
-                  {!isDarkMode && (
-                    <span className="text-[10px] bg-stone-950 text-white font-black px-2 py-0.5 rounded-full border border-stone-900">
-                      Active
-                    </span>
-                  )}
+
+                  {/* UI Preview Area */}
+                  <div className="p-3 bg-[#FAF7F0] rounded-2xl border-2 border-stone-950 space-y-2 shadow-[2.5px_2.5px_0px_#121217]">
+                    <div className="flex items-center justify-between">
+                      <div className="px-2 py-0.5 bg-amber-400 text-stone-950 font-black text-[9px] rounded-md border border-stone-950">
+                        NOTE #1
+                      </div>
+                      <span className="text-[10px] font-black text-stone-700">15m ago</span>
+                    </div>
+                    <p className="text-xs font-black text-stone-950 font-display">
+                      Cafe sync at 4 PM ☕
+                    </p>
+                    <div className="flex items-center gap-2 pt-1 border-t border-stone-950/20 text-[10px] font-bold text-stone-700">
+                      <span>🔥 4 reactions</span>
+                      <span>·</span>
+                      <span>Mutual circle</span>
+                    </div>
+                  </div>
+
+                  {/* Short Description (Strict Light Contrast) */}
+                  <p className="text-xs font-bold text-stone-800 dark:text-stone-300 mt-3 leading-relaxed">
+                    Tactile cream canvas (#FAF7F0) with deep ink-black neo-borders, amber accents, and crisp daylight contrast.
+                  </p>
                 </div>
-                <div className="p-3 bg-[#FAF7F0] rounded-xl border-2 border-stone-900 space-y-2 shadow-[2px_2px_0px_#121217]">
-                  <div className="w-16 h-2 bg-amber-400 rounded-full border border-stone-900" />
-                  <div className="w-28 h-1.5 bg-stone-900 rounded-full" />
-                  <div className="w-20 h-1.5 bg-stone-400 rounded-full" />
-                </div>
-                <p className="text-[11px] font-bold text-stone-800 dark:text-stone-300 mt-2.5">
-                  High-contrast cream canvas (#FAF7F0) with deep ink-black neo-borders.
-                </p>
               </button>
 
-              {/* Dark Theme Card */}
+              {/* Theme Card B: Obsidian Night */}
               <button
                 type="button"
                 onClick={() => !isDarkMode && toggleDarkMode()}
-                className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                className={`p-5 rounded-3xl border-[3px] text-left transition-all cursor-pointer relative group flex flex-col justify-between ${
                   isDarkMode 
-                    ? 'border-stone-900 dark:border-amber-400 bg-amber-950/40 shadow-[4px_4px_0px_#FF9F1C]' 
-                    : 'border-stone-900/30 dark:border-stone-750 bg-stone-100 dark:bg-[#1A1A28] opacity-70 hover:opacity-100'
+                    ? 'border-amber-400 dark:border-amber-400 bg-[#161622] shadow-[5px_5px_0px_#FFB800] ring-2 ring-amber-400' 
+                    : 'border-stone-950/30 dark:border-stone-750 bg-stone-50 dark:bg-[#15141E] opacity-75 hover:opacity-100 hover:border-stone-950 shadow-[3px_3px_0px_#121217] dark:shadow-[3px_3px_0px_#000]'
                 }`}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Moon className="w-5 h-5 text-amber-400 stroke-[2.5]" />
-                    <span className="text-xs font-black text-stone-900 dark:text-stone-100">Obsidian Night</span>
+                <div>
+                  {/* Card Header & Selected Indicator */}
+                  <div className="flex items-center justify-between mb-3.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-xl bg-stone-900 text-amber-400 border-2 border-stone-950 dark:border-stone-700 flex items-center justify-center shadow-[2px_2px_0px_#121217]">
+                        <Moon className="w-5 h-5 stroke-[2.5]" />
+                      </div>
+                      <div>
+                        <span className="text-sm font-black text-stone-950 dark:text-stone-50 block font-display">Obsidian Night</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-500">Dark Mode</span>
+                      </div>
+                    </div>
+                    {isDarkMode ? (
+                      <span className="text-xs bg-amber-400 text-stone-950 font-black px-3 py-1 rounded-xl border-2 border-stone-950 flex items-center gap-1 shadow-[2px_2px_0px_#121217]">
+                        <Check className="w-3.5 h-3.5 stroke-[3.5]" /> Active
+                      </span>
+                    ) : (
+                      <span className="text-[11px] bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 font-bold px-2.5 py-1 rounded-xl border border-stone-400 dark:border-stone-700 group-hover:border-stone-950">
+                        Select
+                      </span>
+                    )}
                   </div>
-                  {isDarkMode && (
-                    <span className="text-[10px] bg-amber-400 text-stone-950 font-black px-2 py-0.5 rounded-full border border-stone-900">
-                      Active
-                    </span>
-                  )}
+
+                  {/* UI Preview Area */}
+                  <div className="p-3 bg-[#0E0E14] rounded-2xl border-2 border-stone-750 space-y-2 shadow-[2.5px_2.5px_0px_#000]">
+                    <div className="flex items-center justify-between">
+                      <div className="px-2 py-0.5 bg-amber-400 text-stone-950 font-black text-[9px] rounded-md border border-stone-950">
+                        NOTE #1
+                      </div>
+                      <span className="text-[10px] font-bold text-stone-400">2h ago</span>
+                    </div>
+                    <p className="text-xs font-black text-stone-50 font-display">
+                      Encrypted draft #2 ⚡
+                    </p>
+                    <div className="flex items-center gap-2 pt-1 border-t border-stone-800 text-[10px] font-bold text-stone-400">
+                      <span>⚡ 7 reactions</span>
+                      <span>·</span>
+                      <span>Private circle</span>
+                    </div>
+                  </div>
+
+                  {/* Short Description */}
+                  <p className="text-xs font-bold text-stone-600 dark:text-stone-300 mt-3 leading-relaxed">
+                    Deep obsidian surface (#0D0D12) with kinetic amber shadows, dark paper cards, and glowing badges.
+                  </p>
                 </div>
-                <div className="p-3 bg-[#0D0D12] rounded-xl border-2 border-stone-750 space-y-2 shadow-[2px_2px_0px_#050508]">
-                  <div className="w-16 h-2 bg-amber-400 rounded-full" />
-                  <div className="w-28 h-1.5 bg-stone-600 rounded-full" />
-                  <div className="w-20 h-1.5 bg-stone-800 rounded-full" />
-                </div>
-                <p className="text-[11px] font-bold text-stone-400 mt-2.5">
-                  Deep obsidian surface (#0D0D12) with kinetic amber shadows.
-                </p>
               </button>
             </div>
           </div>
@@ -646,109 +652,111 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
       {/* Section 2: Privacy Controls */}
       {activeSection === 'privacy' && (
         <div className="space-y-4">
-          <div className="glass-card rounded-3xl p-5 shadow-xs space-y-4 bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800">
-            <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-2">
+          <div className="neo-card rounded-3xl p-5 sm:p-6 shadow-[5px_5px_0px_#121217] dark:shadow-[5px_5px_0px_#000] space-y-5 bg-white dark:bg-[#161622] border-[3px] border-stone-950 dark:border-stone-700">
+            <div className="flex items-center justify-between border-b-[2.5px] border-stone-950 dark:border-stone-800 pb-3">
               <div>
-                <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100">Communication & Connection Privacy</h3>
-                <p className="text-xs text-stone-500 dark:text-stone-400">Zero public discovery · Strict authorization filters</p>
+                <h3 className="text-sm font-black text-stone-950 dark:text-stone-50 uppercase tracking-wide font-display flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-amber-500 stroke-[2.5]" />
+                  <span>Communication & Connection Privacy</span>
+                </h3>
+                <p className="text-xs font-bold text-stone-600 dark:text-stone-400 mt-0.5">
+                  Zero public discovery · Strict authorization filters
+                </p>
               </div>
               {privSuccess && (
-                <span className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
-                  <Check className="w-3.5 h-3.5" /> Saved
+                <span className="text-xs font-black text-stone-950 bg-amber-400 px-3 py-1 rounded-xl border-2 border-stone-950 shadow-[1.5px_1.5px_0px_#121217] flex items-center gap-1">
+                  <Check className="w-3.5 h-3.5 stroke-[3.5]" /> Saved
                 </span>
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 block mb-1">Who can message me?</label>
-                <select
-                  value={privacySettings.whoCanMessageMe}
-                  onChange={(e) => setPrivacySettings({ ...privacySettings, whoCanMessageMe: e.target.value as any })}
-                  className="w-full text-xs p-2.5 bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-700 rounded-xl text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
-                >
-                  <option value="mutual">Mutual connections only</option>
-                  <option value="followers">Any approved follower</option>
-                  <option value="people_i_follow">People I follow</option>
-                  <option value="nobody">Nobody</option>
-                </select>
-              </div>
+            {/* Custom NoteCircle Dropdown Controls */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <NeoSelect
+                id="privacy-who-can-message"
+                label="Who can message me?"
+                value={privacySettings.whoCanMessageMe}
+                onChange={(val) => setPrivacySettings({ ...privacySettings, whoCanMessageMe: val as any })}
+                options={[
+                  { value: 'mutual', label: 'Mutual connections only' },
+                  { value: 'followers', label: 'Any approved follower' },
+                  { value: 'people_i_follow', label: 'People I follow' },
+                  { value: 'nobody', label: 'Nobody' }
+                ]}
+              />
 
-              <div>
-                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 block mb-1">Who can reply to my notes?</label>
-                <select
-                  value={privacySettings.whoCanReply}
-                  onChange={(e) => setPrivacySettings({ ...privacySettings, whoCanReply: e.target.value as any })}
-                  className="w-full text-xs p-2.5 bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-700 rounded-xl text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
-                >
-                  <option value="connections">Approved Connections</option>
-                  <option value="close_friends">Close Friends Only</option>
-                  <option value="nobody">Nobody (Disable replies)</option>
-                </select>
+              <NeoSelect
+                id="privacy-who-can-reply"
+                label="Who can reply to my notes?"
+                value={privacySettings.whoCanReply}
+                onChange={(val) => setPrivacySettings({ ...privacySettings, whoCanReply: val as any })}
+                options={[
+                  { value: 'connections', label: 'Approved Connections' },
+                  { value: 'close_friends', label: 'Close Friends Only' },
+                  { value: 'nobody', label: 'Nobody (Disable replies)' }
+                ]}
+              />
+            </div>
+
+            <div className="pt-3 border-t-[2.5px] border-stone-950 dark:border-stone-800 space-y-3">
+              <h4 className="text-xs font-black uppercase tracking-wider text-stone-900 dark:text-stone-200 font-display">
+                Profile Field Visibility (Strangers never see these)
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <NeoSelect
+                  id="privacy-bio"
+                  label="Bio"
+                  value={privacySettings.bioVisibility}
+                  onChange={(val) => setPrivacySettings({ ...privacySettings, bioVisibility: val as any })}
+                  options={[
+                    { value: 'connections', label: 'Connections' },
+                    { value: 'only_me', label: 'Only Me' }
+                  ]}
+                />
+
+                <NeoSelect
+                  id="privacy-city"
+                  label="City"
+                  value={privacySettings.cityVisibility}
+                  onChange={(val) => setPrivacySettings({ ...privacySettings, cityVisibility: val as any })}
+                  options={[
+                    { value: 'connections', label: 'Connections' },
+                    { value: 'only_me', label: 'Only Me' }
+                  ]}
+                />
+
+                <NeoSelect
+                  id="privacy-birthday"
+                  label="Birthday"
+                  value={privacySettings.birthdayVisibility}
+                  onChange={(val) => setPrivacySettings({ ...privacySettings, birthdayVisibility: val as any })}
+                  options={[
+                    { value: 'only_me', label: 'Only Me' },
+                    { value: 'connections', label: 'Connections' }
+                  ]}
+                />
+
+                <NeoSelect
+                  id="privacy-workplace"
+                  label="Workplace"
+                  value={privacySettings.workplaceVisibility}
+                  onChange={(val) => setPrivacySettings({ ...privacySettings, workplaceVisibility: val as any })}
+                  options={[
+                    { value: 'connections', label: 'Connections' },
+                    { value: 'only_me', label: 'Only Me' }
+                  ]}
+                />
               </div>
             </div>
 
-            <div className="pt-2 border-t border-stone-100 dark:border-stone-800 space-y-3">
-              <h4 className="text-xs font-bold text-stone-800 dark:text-stone-200">Profile Field Visibility (Strangers never see these)</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div>
-                  <label className="text-[11px] font-semibold text-stone-600 dark:text-stone-400 block mb-1">Bio</label>
-                  <select
-                    value={privacySettings.bioVisibility}
-                    onChange={(e) => setPrivacySettings({ ...privacySettings, bioVisibility: e.target.value as any })}
-                    className="w-full text-xs p-2 bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-700 rounded-xl text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
-                  >
-                    <option value="connections">Connections</option>
-                    <option value="only_me">Only Me</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-semibold text-stone-600 dark:text-stone-400 block mb-1">City</label>
-                  <select
-                    value={privacySettings.cityVisibility}
-                    onChange={(e) => setPrivacySettings({ ...privacySettings, cityVisibility: e.target.value as any })}
-                    className="w-full text-xs p-2 bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-700 rounded-xl text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
-                  >
-                    <option value="connections">Connections</option>
-                    <option value="only_me">Only Me</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-semibold text-stone-600 dark:text-stone-400 block mb-1">Birthday</label>
-                  <select
-                    value={privacySettings.birthdayVisibility}
-                    onChange={(e) => setPrivacySettings({ ...privacySettings, birthdayVisibility: e.target.value as any })}
-                    className="w-full text-xs p-2 bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-700 rounded-xl text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
-                  >
-                    <option value="only_me">Only Me</option>
-                    <option value="connections">Connections</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-semibold text-stone-600 dark:text-stone-400 block mb-1">Workplace</label>
-                  <select
-                    value={privacySettings.workplaceVisibility}
-                    onChange={(e) => setPrivacySettings({ ...privacySettings, workplaceVisibility: e.target.value as any })}
-                    className="w-full text-xs p-2 bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-700 rounded-xl text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
-                  >
-                    <option value="connections">Connections</option>
-                    <option value="only_me">Only Me</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-end pt-3 border-t-[2.5px] border-stone-950 dark:border-stone-800">
               <button
                 type="button"
                 onClick={handleSavePrivacy}
                 disabled={isSaving}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-transform active:scale-98"
+                className="px-5 py-2.5 neo-btn-primary text-stone-950 rounded-xl text-xs font-black shadow-[3px_3px_0px_#121217] cursor-pointer"
               >
-                Save Privacy Settings
+                {isSaving ? 'Saving...' : 'Save Privacy Settings'}
               </button>
             </div>
           </div>
@@ -758,28 +766,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
       {/* Section 3: Security & Sessions */}
       {activeSection === 'security' && (
         <div className="space-y-4">
-          <div className="glass-card rounded-3xl p-5 shadow-xs space-y-4 bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800">
-            <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 border-b border-stone-100 dark:border-stone-800 pb-2">
-              Security Architecture
+          <div className="neo-card rounded-3xl p-5 sm:p-6 shadow-[5px_5px_0px_#121217] dark:shadow-[5px_5px_0px_#000] space-y-4 bg-white dark:bg-[#161622] border-[3px] border-stone-950 dark:border-stone-700">
+            <h3 className="text-sm font-black text-stone-950 dark:text-stone-50 uppercase tracking-wide border-b-[2.5px] border-stone-950 dark:border-stone-800 pb-2.5 font-display flex items-center gap-2">
+              <Lock className="w-4 h-4 text-amber-500 stroke-[2.5]" />
+              <span>Security Architecture</span>
             </h3>
 
-            <div className="space-y-2 text-xs">
-              <div className="p-3 bg-stone-50 dark:bg-stone-850 rounded-2xl border border-stone-200/80 dark:border-stone-800 flex items-center justify-between">
+            <div className="space-y-2.5 text-xs">
+              <div className="p-3.5 bg-[#FAF7F0] dark:bg-[#15141A] rounded-2xl border-2 border-stone-950 dark:border-stone-700 flex items-center justify-between shadow-[2px_2px_0px_#121217] dark:shadow-[2px_2px_0px_#000]">
                 <div>
-                  <p className="font-bold text-stone-900 dark:text-stone-100">End-to-End Encryption Algorithm</p>
-                  <p className="text-stone-500 dark:text-stone-400">AES-GCM 256-bit with PBKDF2 device key derivation</p>
+                  <p className="font-black text-stone-950 dark:text-stone-100 font-display">End-to-End Encryption Algorithm</p>
+                  <p className="text-stone-600 dark:text-stone-400 font-medium">AES-GCM 256-bit with PBKDF2 device key derivation</p>
                 </div>
-                <span className="text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-full font-bold border border-amber-200 dark:border-amber-800">
+                <span className="text-xs bg-amber-400 text-stone-950 font-black px-3 py-1 rounded-xl border-2 border-stone-950 shadow-[1.5px_1.5px_0px_#121217]">
                   Active
                 </span>
               </div>
 
-              <div className="p-3 bg-stone-50 dark:bg-stone-850 rounded-2xl border border-stone-200/80 dark:border-stone-800 flex items-center justify-between">
+              <div className="p-3.5 bg-[#FAF7F0] dark:bg-[#15141A] rounded-2xl border-2 border-stone-950 dark:border-stone-700 flex items-center justify-between shadow-[2px_2px_0px_#121217] dark:shadow-[2px_2px_0px_#000]">
                 <div>
-                  <p className="font-bold text-stone-900 dark:text-stone-100">Password Hashing</p>
-                  <p className="text-stone-500 dark:text-stone-400">PBKDF2-SHA256 with 1000-pass cryptographic salt</p>
+                  <p className="font-black text-stone-950 dark:text-stone-100 font-display">Password Hashing</p>
+                  <p className="text-stone-600 dark:text-stone-400 font-medium">PBKDF2-SHA256 with 1000-pass cryptographic salt</p>
                 </div>
-                <span className="text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-full font-bold border border-amber-200 dark:border-amber-800">
+                <span className="text-xs bg-amber-400 text-stone-950 font-black px-3 py-1 rounded-xl border-2 border-stone-950 shadow-[1.5px_1.5px_0px_#121217]">
                   Enforced
                 </span>
               </div>
@@ -787,27 +796,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
           </div>
 
           {/* Device Cryptographic Identity & 12-Word Recovery Phrase */}
-          <div className="glass-card rounded-3xl p-5 shadow-xs space-y-4 bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800">
-            <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-2">
+          <div className="neo-card rounded-3xl p-5 sm:p-6 shadow-[5px_5px_0px_#121217] dark:shadow-[5px_5px_0px_#000] space-y-4 bg-white dark:bg-[#161622] border-[3px] border-stone-950 dark:border-stone-700">
+            <div className="flex items-center justify-between border-b-[2.5px] border-stone-950 dark:border-stone-800 pb-2.5">
               <div>
-                <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
-                  <Key className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <h3 className="text-sm font-black text-stone-950 dark:text-stone-100 uppercase tracking-wide font-display flex items-center gap-2">
+                  <Key className="w-4 h-4 text-amber-500 stroke-[2.5]" />
                   <span>Device Cryptographic Identity & Key Recovery</span>
                 </h3>
-                <p className="text-xs text-stone-500 dark:text-stone-400">Zero-knowledge local key pair and cross-device recovery phrase</p>
+                <p className="text-xs font-bold text-stone-600 dark:text-stone-400">Zero-knowledge local key pair and cross-device recovery phrase</p>
               </div>
-              <span className="text-xs font-mono font-bold text-stone-700 dark:text-stone-300 bg-stone-100 dark:bg-stone-800 px-2.5 py-1 rounded-xl border border-stone-200 dark:border-stone-700">
+              <span className="text-xs font-mono font-black text-stone-950 dark:text-stone-100 bg-amber-200 dark:bg-amber-950/60 px-3 py-1 rounded-xl border-2 border-stone-950 shadow-[1.5px_1.5px_0px_#121217]">
                 {deviceIdentity?.keyId || 'KEY-LOCAL-INIT'}
               </span>
             </div>
 
-            <div className="p-4 bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 rounded-2xl space-y-3">
+            {/* Recovery Phrase Section with Visual Separation */}
+            <div className="p-4 bg-[#FFF9ED] dark:bg-[#1F1B12] border-2 border-amber-400 rounded-2xl space-y-3 shadow-[2.5px_2.5px_0px_#FFB800]">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-stone-800 dark:text-stone-200">12-Word Device Recovery Phrase</span>
+                <span className="text-xs font-black uppercase tracking-wider text-stone-950 dark:text-stone-100 font-display">
+                  12-Word Device Recovery Phrase
+                </span>
                 <button
                   type="button"
                   onClick={() => setShowRecoveryPhrase(!showRecoveryPhrase)}
-                  className="text-xs font-semibold text-amber-700 dark:text-amber-400 hover:text-amber-800 underline"
+                  className="px-3 py-1.5 text-xs font-black bg-amber-400 text-stone-950 border-2 border-stone-950 rounded-xl shadow-[2px_2px_0px_#121217] hover:bg-amber-300 transition-all cursor-pointer"
                 >
                   {showRecoveryPhrase ? 'Hide Phrase' : 'Reveal Phrase'}
                 </button>
@@ -816,26 +828,31 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
               {showRecoveryPhrase ? (
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-1 animate-in fade-in">
                   {deviceIdentity?.recoveryPhrase.split(' ').map((word, idx) => (
-                    <div key={idx} className="bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 px-2.5 py-1.5 rounded-xl text-center shadow-2xs">
-                      <span className="text-[10px] text-stone-400 block font-mono">{idx + 1}</span>
-                      <span className="text-xs font-bold text-stone-800 dark:text-stone-200 font-mono">{word}</span>
+                    <div key={idx} className="bg-white dark:bg-[#15141A] border-2 border-stone-950 dark:border-stone-700 px-2.5 py-1.5 rounded-xl text-center shadow-[1.5px_1.5px_0px_#121217]">
+                      <span className="text-[10px] text-stone-500 block font-mono font-black">{idx + 1}</span>
+                      <span className="text-xs font-black text-stone-950 dark:text-stone-100 font-mono">{word}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-stone-500 dark:text-stone-400 italic bg-white dark:bg-stone-800 p-3 rounded-xl border border-stone-200/80 dark:border-stone-700">
-                  •••••••• •••••••• •••••••• •••••••• (Click 'Reveal Phrase' to view or back up your 12-word cryptographic seed)
-                </p>
+                <div className="p-3 bg-white dark:bg-[#15141A] rounded-xl border-2 border-stone-950 dark:border-stone-700 shadow-[1.5px_1.5px_0px_#121217] flex items-center justify-between">
+                  <span className="text-xs text-stone-500 dark:text-stone-400 font-mono tracking-widest font-bold">
+                    •••••••• •••••••• •••••••• ••••••••
+                  </span>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                    Encrypted on-device
+                  </span>
+                </div>
               )}
 
-              <p className="text-[11px] text-stone-500 dark:text-stone-400 leading-relaxed">
+              <p className="text-[11px] font-bold text-stone-700 dark:text-stone-300 leading-relaxed">
                 Keep this phrase safe. When switching browsers or restoring your account on a secondary device, enter these 12 words to restore full local decryption capabilities.
               </p>
             </div>
 
             {/* Restore Device Key Form */}
-            <form onSubmit={handleRestoreIdentity} className="space-y-2 pt-2 border-t border-stone-100 dark:border-stone-800">
-              <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 block">
+            <form onSubmit={handleRestoreIdentity} className="space-y-2 pt-2 border-t-[2.5px] border-stone-950 dark:border-stone-800">
+              <label className="text-xs font-black uppercase tracking-wider text-stone-900 dark:text-stone-200 block font-display">
                 Restore Device Identity from 12-Word Phrase
               </label>
               <div className="flex gap-2">
@@ -844,11 +861,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
                   value={restoreInput}
                   onChange={(e) => setRestoreInput(e.target.value)}
                   placeholder="Enter 12 recovery words separated by spaces..."
-                  className="flex-1 text-xs p-2.5 bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-700 rounded-xl text-stone-900 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
+                  className="flex-1 text-xs font-bold p-3 neo-input text-stone-900 dark:text-stone-100"
                 />
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-stone-800 dark:bg-stone-700 hover:bg-stone-900 text-white rounded-xl text-xs font-semibold shrink-0 shadow-xs transition-transform active:scale-98"
+                  className="px-4 py-2 neo-btn-primary text-stone-950 rounded-xl text-xs font-black shrink-0 cursor-pointer"
                 >
                   Restore Key
                 </button>
@@ -856,29 +873,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
             </form>
 
             {/* Live Cryptographic Self-Test */}
-            <div className="pt-2 border-t border-stone-100 dark:border-stone-800 space-y-2">
-              <div className="flex items-center justify-between">
+            <div className="pt-2 border-t-[2.5px] border-stone-950 dark:border-stone-800 space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <h4 className="text-xs font-bold text-stone-800 dark:text-stone-200">In-Browser Cryptographic Audit</h4>
-                  <p className="text-[11px] text-stone-500 dark:text-stone-400">Live client AES-GCM 256-bit round-trip self-test</p>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-stone-900 dark:text-stone-200 font-display">
+                    In-Browser Cryptographic Audit
+                  </h4>
+                  <p className="text-[11px] font-bold text-stone-600 dark:text-stone-400">
+                    Live client AES-GCM 256-bit round-trip self-test
+                  </p>
                 </div>
                 <button
                   type="button"
                   onClick={handleRunCryptoSelfTest}
                   disabled={isTestingCrypto}
-                  className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-xs disabled:opacity-50 transition-transform active:scale-98"
+                  className="px-4 py-2 neo-btn-primary text-stone-950 rounded-xl text-xs font-black disabled:opacity-50 cursor-pointer self-start sm:self-auto"
                 >
                   {isTestingCrypto ? 'Testing...' : 'Run Cryptographic Self-Test'}
                 </button>
               </div>
 
               {cryptoTestResult && (
-                <div className="p-3 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-xs space-y-1.5 animate-in fade-in">
-                  <div className="flex items-center gap-1.5 text-amber-900 dark:text-amber-200 font-bold">
-                    <Check className="w-4 h-4 text-amber-600" />
+                <div className="p-3.5 bg-amber-100 dark:bg-amber-950/40 border-2 border-stone-950 dark:border-amber-700 rounded-2xl text-xs space-y-1.5 shadow-[2px_2px_0px_#121217]">
+                  <div className="flex items-center gap-2 text-stone-950 dark:text-amber-200 font-black font-display">
+                    <Check className="w-4 h-4 text-amber-600 stroke-[3]" />
                     <span>Cryptographic Verification Passed</span>
                   </div>
-                  <div className="font-mono text-[11px] text-amber-850 dark:text-amber-300 space-y-0.5">
+                  <div className="font-mono text-[11px] text-stone-800 dark:text-amber-300 space-y-0.5 font-bold">
                     <p>• Algorithm: {cryptoTestResult.algorithm}</p>
                     <p>• Ciphertext (AES-GCM): {cryptoTestResult.ciphertextSample}</p>
                     <p>• Roundtrip match: {cryptoTestResult.roundtripMatch ? 'Verified (100% exact)' : 'Failed'}</p>
@@ -889,16 +910,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
           </div>
 
           {/* Active Sessions & Logged-In Devices */}
-          <div className="glass-card rounded-3xl p-5 shadow-xs space-y-4 bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800">
-            <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-2">
+          <div className="neo-card rounded-3xl p-5 sm:p-6 shadow-[5px_5px_0px_#121217] dark:shadow-[5px_5px_0px_#000] space-y-4 bg-white dark:bg-[#161622] border-[3px] border-stone-950 dark:border-stone-700">
+            <div className="flex items-center justify-between border-b-[2.5px] border-stone-950 dark:border-stone-800 pb-2.5">
               <div>
-                <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100">Logged-In Devices & Active Sessions</h3>
-                <p className="text-xs text-stone-500 dark:text-stone-400">Manage all recognized browser and companion devices</p>
+                <h3 className="text-sm font-black text-stone-950 dark:text-stone-100 uppercase tracking-wide font-display">
+                  Logged-In Devices & Active Sessions
+                </h3>
+                <p className="text-xs font-bold text-stone-600 dark:text-stone-400">
+                  Manage all recognized browser and companion devices
+                </p>
               </div>
               <button
                 type="button"
                 onClick={handleLogoutAllOtherDevices}
-                className="px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 border border-rose-200 dark:border-rose-900 rounded-xl text-xs font-semibold"
+                className="px-3.5 py-1.5 neo-btn-coral text-white rounded-xl text-xs font-black shadow-[2px_2px_0px_#121217] cursor-pointer"
               >
                 Logout All Other Devices
               </button>
@@ -906,42 +931,42 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
 
             <div className="space-y-2.5 text-xs">
               {sessions.length === 0 ? (
-                <div className="p-3 bg-stone-50 dark:bg-stone-850 rounded-2xl border border-stone-200 dark:border-stone-800 flex items-center justify-between">
+                <div className="p-3.5 bg-[#FAF7F0] dark:bg-[#15141A] rounded-2xl border-2 border-stone-950 dark:border-stone-700 flex items-center justify-between shadow-[2px_2px_0px_#121217] dark:shadow-[2px_2px_0px_#000]">
                   <div>
-                    <p className="font-bold text-stone-900 dark:text-stone-100">Current Device</p>
-                    <p className="text-stone-500 dark:text-stone-400">Web Client · Local device session</p>
+                    <p className="font-black text-stone-950 dark:text-stone-100 font-display">Current Device</p>
+                    <p className="text-stone-600 dark:text-stone-400 font-medium">Web Client · Local device session</p>
                   </div>
-                  <span className="text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-full font-semibold border border-amber-200 dark:border-amber-800">
+                  <span className="text-xs bg-amber-400 text-stone-950 font-black px-3 py-1 rounded-xl border-2 border-stone-950 shadow-[1.5px_1.5px_0px_#121217]">
                     Active Now
                   </span>
                 </div>
               ) : (
                 sessions.map((s) => (
-                  <div key={s.id} className="p-3 bg-stone-50 dark:bg-stone-850 rounded-2xl border border-stone-200 dark:border-stone-800 flex items-center justify-between">
+                  <div key={s.id} className="p-3.5 bg-[#FAF7F0] dark:bg-[#15141A] rounded-2xl border-2 border-stone-950 dark:border-stone-700 flex items-center justify-between shadow-[2px_2px_0px_#121217] dark:shadow-[2px_2px_0px_#000]">
                     <div>
-                      <p className="font-bold text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
-                        <Smartphone className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400" />
+                      <p className="font-black text-stone-950 dark:text-stone-100 flex items-center gap-2 font-display">
+                        <Smartphone className="w-4 h-4 text-stone-600 dark:text-stone-400 stroke-[2.5]" />
                         <span>{s.device}</span>
                       </p>
-                      <p className="text-stone-500 dark:text-stone-400 text-[11px]">
+                      <p className="text-stone-600 dark:text-stone-400 text-[11px] font-medium">
                         {s.browser} · IP: {s.ip} · Last active: {new Date(s.lastActive).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
 
                     <div className="flex items-center gap-2">
                       {s.current ? (
-                        <span className="text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-full font-bold border border-amber-200 dark:border-amber-800 text-[10px]">
+                        <span className="text-[10px] bg-amber-400 text-stone-950 font-black px-2.5 py-1 rounded-xl border-2 border-stone-950 shadow-[1.5px_1.5px_0px_#121217]">
                           This Device
                         </span>
                       ) : (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-stone-500 dark:text-stone-400 bg-stone-200 dark:bg-stone-800 px-2.5 py-1 rounded-full font-medium text-[10px]">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 font-black px-2.5 py-1 rounded-xl border border-stone-400 dark:border-stone-700">
                             Remote Device
                           </span>
                           <button
                             type="button"
                             onClick={() => handleRevokeSession(s.id)}
-                            className="px-2 py-0.5 text-[10px] text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-md border border-rose-200 dark:border-rose-900 font-semibold"
+                            className="px-2.5 py-1 text-[11px] neo-btn-coral text-white rounded-lg font-black cursor-pointer shadow-[1.5px_1.5px_0px_#121217]"
                           >
                             Revoke
                           </button>
@@ -953,13 +978,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
               )}
             </div>
 
-            <div className="flex justify-end pt-2 border-t border-stone-100 dark:border-stone-800">
+            <div className="flex justify-end pt-3 border-t-[2.5px] border-stone-950 dark:border-stone-800">
               <button
                 type="button"
                 onClick={logout}
-                className="px-4 py-2 bg-stone-800 dark:bg-stone-700 hover:bg-stone-900 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-transform active:scale-98"
+                className="px-4 py-2 neo-btn text-stone-900 dark:text-stone-100 rounded-xl text-xs font-black flex items-center gap-2 cursor-pointer shadow-[2px_2px_0px_#121217]"
               >
-                <LogOut className="w-3.5 h-3.5" />
+                <LogOut className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span>Logout Current Device</span>
               </button>
             </div>
@@ -969,39 +994,46 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
 
       {/* Section 4: Notifications */}
       {activeSection === 'notifications' && (
-        <div className="glass-card rounded-3xl p-5 shadow-xs space-y-4 bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800">
-          <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-2">
+        <div className="neo-card rounded-3xl p-5 sm:p-6 shadow-[5px_5px_0px_#121217] dark:shadow-[5px_5px_0px_#000] space-y-4 bg-white dark:bg-[#161622] border-[3px] border-stone-950 dark:border-stone-700">
+          <div className="flex items-center justify-between border-b-[2.5px] border-stone-950 dark:border-stone-800 pb-2.5">
             <div>
-              <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100">Notification Preferences</h3>
-              <p className="text-xs text-stone-500 dark:text-stone-400">Control notifications for note activity and chats</p>
+              <h3 className="text-sm font-black text-stone-950 dark:text-stone-100 uppercase tracking-wide font-display flex items-center gap-2">
+                <Bell className="w-4 h-4 text-amber-500 stroke-[2.5]" />
+                <span>Notification Preferences</span>
+              </h3>
+              <p className="text-xs font-bold text-stone-600 dark:text-stone-400">
+                Control notifications for note activity and chats
+              </p>
             </div>
             {notifSuccess && (
-              <span className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
-                <Check className="w-3.5 h-3.5" /> Saved
+              <span className="text-xs font-black text-stone-950 bg-amber-400 px-3 py-1 rounded-xl border-2 border-stone-950 shadow-[1.5px_1.5px_0px_#121217] flex items-center gap-1">
+                <Check className="w-3.5 h-3.5 stroke-[3.5]" /> Saved
               </span>
             )}
           </div>
 
-          <div className="space-y-2.5 text-xs">
+          <div className="space-y-3 text-xs pt-1">
             {Object.entries(notifSettings).map(([key, val]) => (
-              <label key={key} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-stone-50 dark:hover:bg-stone-850 cursor-pointer transition-colors">
-                <span className="font-medium text-stone-800 dark:text-stone-200 capitalize">
-                  {key.replace(/([A-Z])/g, ' $1')}
-                </span>
-                <input
-                  type="checkbox"
+              <div 
+                key={key} 
+                className="p-3 bg-[#FAF7F0] dark:bg-[#15141A] rounded-2xl border-2 border-stone-950 dark:border-stone-750 shadow-[2px_2px_0px_#121217] dark:shadow-[2px_2px_0px_#000] flex items-center justify-between"
+              >
+                <NeoCheckbox
+                  id={`notif-${key}`}
                   checked={val}
-                  onChange={(e) => setNotifSettings({ ...notifSettings, [key]: e.target.checked })}
-                  className="rounded-md text-amber-600 focus:ring-amber-500"
+                  onChange={(checked) => setNotifSettings({ ...notifSettings, [key]: checked })}
+                  label={<span className="capitalize text-stone-950 dark:text-stone-100 font-black">{key.replace(/([A-Z])/g, ' $1')}</span>}
+                  description="Enable real-time instant alerts for this category"
+                  className="w-full justify-between flex-row-reverse"
                 />
-              </label>
+              </div>
             ))}
           </div>
 
-          <div className="flex justify-end pt-2 border-t border-stone-100 dark:border-stone-800">
+          <div className="flex justify-end pt-3 border-t-[2.5px] border-stone-950 dark:border-stone-800">
             <button
               onClick={handleSaveNotifications}
-              className="px-4 py-2 bg-amber-600 text-white rounded-xl text-xs font-semibold hover:bg-amber-700 shadow-xs transition-transform active:scale-98"
+              className="px-5 py-2.5 neo-btn-primary text-stone-950 rounded-xl text-xs font-black shadow-[3px_3px_0px_#121217] cursor-pointer"
             >
               Save Notification Settings
             </button>
@@ -1012,32 +1044,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
       {/* Section 5: Data & Storage */}
       {activeSection === 'data' && (
         <div className="space-y-4">
-          <div className="glass-card rounded-3xl p-5 shadow-xs space-y-4 bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800">
-            <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 border-b border-stone-100 dark:border-stone-800 pb-2 flex items-center gap-2">
-              <Database className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+          <div className="neo-card rounded-3xl p-5 sm:p-6 shadow-[5px_5px_0px_#121217] dark:shadow-[5px_5px_0px_#000] space-y-4 bg-white dark:bg-[#161622] border-[3px] border-stone-950 dark:border-stone-700">
+            <h3 className="text-sm font-black text-stone-950 dark:text-stone-100 uppercase tracking-wide border-b-[2.5px] border-stone-950 dark:border-stone-800 pb-2.5 flex items-center gap-2 font-display">
+              <Database className="w-4 h-4 text-amber-500 stroke-[2.5]" />
               <span>Local-First Data & Portability (GDPR Article 20)</span>
             </h3>
 
-            <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
+            <p className="text-xs font-bold text-stone-700 dark:text-stone-300 leading-relaxed">
               NoteCircle gives you complete ownership of your personal data. You can download an offline JSON archive of your account profile and connection records anytime.
             </p>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
               <a
                 href={api.exportPersonalDataUrl()}
                 download
-                className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-xs transition-transform active:scale-98"
+                className="px-5 py-2.5 neo-btn-primary text-stone-950 rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-[3px_3px_0px_#121217] cursor-pointer"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-4 h-4 stroke-[2.5]" />
                 <span>Download Personal Data Archive (.JSON)</span>
               </a>
 
               <button
                 type="button"
                 onClick={handleClearLocalData}
-                className="px-4 py-2.5 neu-button text-stone-700 dark:text-stone-300 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 hover:text-rose-600"
+                className="px-5 py-2.5 neo-btn text-stone-900 dark:text-stone-100 rounded-xl text-xs font-black flex items-center justify-center gap-2 hover:bg-rose-100 hover:text-rose-700 border-2 border-stone-950 shadow-[3px_3px_0px_#121217] cursor-pointer"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-4 h-4 stroke-[2.5]" />
                 <span>Clear Local Device Cache</span>
               </button>
             </div>
@@ -1047,18 +1079,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
 
       {/* Section 6: Android Architecture Stack */}
       {activeSection === 'android' && (
-        <div className="glass-card rounded-3xl p-5 shadow-xs space-y-3 bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800">
-          <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 border-b border-stone-100 dark:border-stone-800 pb-2 flex items-center gap-2">
-            <Smartphone className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+        <div className="neo-card rounded-3xl p-5 sm:p-6 shadow-[5px_5px_0px_#121217] dark:shadow-[5px_5px_0px_#000] space-y-4 bg-white dark:bg-[#161622] border-[3px] border-stone-950 dark:border-stone-700">
+          <h3 className="text-sm font-black text-stone-950 dark:text-stone-100 uppercase tracking-wide border-b-[2.5px] border-stone-950 dark:border-stone-800 pb-2.5 flex items-center gap-2 font-display">
+            <Smartphone className="w-4 h-4 text-amber-500 stroke-[2.5]" />
             <span>Native Android Companion Specs</span>
           </h3>
 
-          <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
+          <p className="text-xs font-bold text-stone-700 dark:text-stone-300 leading-relaxed">
             The NoteCircle native Android application uses Jetpack Compose, Kotlin Coroutines, Retrofit, and Android Keystore for secure local encryption matching this web client's local-first architecture.
           </p>
 
-          <div className="bg-stone-900 text-stone-100 p-4 rounded-2xl font-mono text-[11px] space-y-1.5 border border-stone-800">
-            <p className="text-amber-400">// Native Android Stack (See /android/README.md)</p>
+          <div className="bg-[#0D0D14] text-stone-100 p-4 rounded-2xl font-mono text-[11px] space-y-1.5 border-2 border-stone-950 dark:border-stone-700 shadow-[3px_3px_0px_#121217]">
+            <p className="text-amber-400 font-bold">// Native Android Stack (See /android/README.md)</p>
             <p>UI: Jetpack Compose Material 3</p>
             <p>Local Storage: Room + EncryptedSharedPreferences</p>
             <p>Crypto: Android Keystore AES-GCM 256</p>
@@ -1066,7 +1098,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onOpenSupport, onOpe
           </div>
         </div>
       )}
-
       {/* Verification OTP Modal (Change Email or Mobile) */}
       {verifyModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/70 backdrop-blur-xs">

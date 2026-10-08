@@ -3,6 +3,7 @@ import { X, Bug, CheckCircle, Clock, AlertCircle, Send } from 'lucide-react';
 import { api } from '../services/api.ts';
 import { useAuth } from '../context/AuthContext.tsx';
 import type { BugReport } from '../types/index.ts';
+import { NeoSelect } from './NeoSelect.tsx';
 
 interface BugReportModalProps {
   isOpen: boolean;
@@ -137,42 +138,45 @@ export const BugReportModal: React.FC<BugReportModalProps> = ({ isOpen, onClose 
                 </div>
               )}
 
-              <div>
-                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 block mb-1">Issue Category</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as any)}
-                  className="w-full text-xs p-2.5 bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-700 rounded-xl text-stone-800 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
-                >
-                  <option value="notes">Notes & Expiration</option>
-                  <option value="chat">Private Chat & Messaging</option>
-                  <option value="privacy">Privacy & Authorization</option>
-                  <option value="sync">Local-First Sync & Offline</option>
-                  <option value="ui">UI & Responsive Layout</option>
-                  <option value="other">General Feedback / Other</option>
-                </select>
-              </div>
+              <NeoSelect
+                id="bug-category"
+                label="Issue Category"
+                value={category}
+                onChange={(val) => setCategory(val as any)}
+                options={[
+                  { value: 'notes', label: 'Notes & Expiration' },
+                  { value: 'chat', label: 'Private Chat & Messaging' },
+                  { value: 'privacy', label: 'Privacy & Authorization' },
+                  { value: 'sync', label: 'Local-First Sync & Offline' },
+                  { value: 'ui', label: 'UI & Responsive Layout' },
+                  { value: 'other', label: 'General Feedback / Other' }
+                ]}
+              />
 
               <div>
-                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 block mb-1">Description</label>
+                <label className="text-[11px] font-black uppercase tracking-wider text-stone-900 dark:text-stone-200 block mb-1 font-display">
+                  Description
+                </label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={4}
                   placeholder="What happened? Include steps to reproduce or expected behavior..."
-                  className="w-full text-xs p-3 bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-700 rounded-xl text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-hidden focus:border-amber-500 resize-none"
+                  className="w-full text-xs font-bold p-3 neo-input text-stone-900 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 resize-none"
                   required
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 block mb-1">Error Identifier / Code (Optional)</label>
+                <label className="text-[11px] font-black uppercase tracking-wider text-stone-900 dark:text-stone-200 block mb-1 font-display">
+                  Error Identifier / Code (Optional)
+                </label>
                 <input
                   type="text"
                   value={errorId}
                   onChange={(e) => setErrorId(e.target.value)}
                   placeholder="e.g. ERR_SYNC_TIMEOUT_403"
-                  className="w-full text-xs p-2.5 bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-700 rounded-xl text-stone-800 dark:text-stone-100 focus:outline-hidden focus:border-amber-500"
+                  className="w-full text-xs font-bold p-3 neo-input text-stone-900 dark:text-stone-100"
                 />
               </div>
 

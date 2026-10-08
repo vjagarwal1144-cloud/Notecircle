@@ -144,19 +144,29 @@ authRouter.post('/register/send-otp', async (req, res) => {
 
   const otpRecord = db.createRegistrationOtp(cleanEmail, otpHash, 10, 60);
 
-  // Dispatch real transactional email
+  // Dispatch real transactional email. The OTP is never returned to the client.
   const emailRes = await sendRegistrationOtpEmail(cleanEmail, otp, 10);
 
-  // Requirement 6: NEVER expose OTP through API response, logs, or client payload
+  // Do not claim that an OTP was sent when the email provider is unavailable.
+  // This prevents a confusing "code sent" state when SMTP/Resend is not configured
+  // or the provider rejects the message.
+  if (!emailRes.success) {
+    console.error('[AUTH OTP] Registration OTP delivery failed:', emailRes.error || 'Unknown email delivery error');
+    return res.status(503).json({
+      error: 'We could not send the verification code right now. Please try again shortly.',
+      code: 'EMAIL_DELIVERY_FAILED',
+      emailConfigured: emailRes.configured
+    });
+  }
+
+  // Requirement: NEVER expose OTP through API response, logs, or client payload.
   return res.json({
     success: true,
-    message: emailRes.configured 
-      ? 'Verification code sent to your email.'
-      : 'Verification code generated. (Configure SMTP environment variables for production email delivery).',
+    message: 'Verification code sent to your email.',
     email: cleanEmail,
     expiresAt: otpRecord.expiresAt,
     cooldownUntil: otpRecord.cooldownUntil,
-    emailConfigured: emailRes.configured
+    emailConfigured: true
   });
 });
 

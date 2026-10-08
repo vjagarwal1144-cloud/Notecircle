@@ -12,10 +12,15 @@ export interface EmailSendResult {
 
 // Inspect environment variables for SMTP or provider configuration
 function getTransporter() {
-  const host = process.env.SMTP_HOST?.trim();
-  const port = Number(process.env.SMTP_PORT) || 587;
+  const provider = process.env.EMAIL_PROVIDER?.trim().toLowerCase();
   const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS?.trim();
+
+  // Gmail is supported explicitly so a personal Gmail account can be the
+  // sender without requiring the user to configure every SMTP field.
+  const isGmail = provider === 'gmail' || user?.toLowerCase().endsWith('@gmail.com');
+  const host = isGmail ? 'smtp.gmail.com' : process.env.SMTP_HOST?.trim();
+  const port = Number(process.env.SMTP_PORT) || (isGmail ? 587 : 587);
   const secure = process.env.SMTP_SECURE === 'true' || port === 465;
 
   if (!host || !user || !pass) {
@@ -33,7 +38,7 @@ function getTransporter() {
   });
 }
 
-const FROM_EMAIL = process.env.EMAIL_FROM?.trim() || process.env.SMTP_USER?.trim() || 'NoteCircle <no-reply@notecircle.app>';
+const FROM_EMAIL = process.env.EMAIL_FROM?.trim() || process.env.SMTP_USER?.trim();
 
 export async function sendTransactionalEmail(
   to: string,
@@ -246,8 +251,11 @@ export async function sendSecurityAlertEmail(email: string, title: string, messa
 
 // 5. Admin Notification of New Verified User
 export async function sendAdminNewUserAlert(newUser: User): Promise<EmailSendResult | null> {
-  const adminEmail = process.env.ADMIN_EMAIL?.trim() || 'vjagarwal1133@gmail.com';
-  if (!adminEmail) return null;
+  const adminEmail = process.env.ADMIN_EMAIL?.trim();
+  if (!adminEmail) {
+    console.warn('[EMAIL SYSTEM] ADMIN_EMAIL is not configured; skipping admin notification.');
+    return null;
+  }
 
   const subject = `[Admin Alert] New Verified User: @${newUser.username}`;
   const html = `

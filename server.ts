@@ -104,6 +104,20 @@ async function startServer() {
     return res.status(health.connected ? 200 : 503).json(health);
   });
 
+  // Database health endpoint
+  app.get('/api/health/database', async (_req, res) => {
+    const health = await checkSupabaseHealth();
+    return res.status(health.connected ? 200 : 503).json({
+      database: 'supabase',
+      connected: health.connected
+    });
+  });
+
+  // Catch-all for undefined /api routes so they return JSON 404 rather than SPA HTML
+  app.all('/api/*', (_req, res) => {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  });
+
   // WebSocket Server Setup with authenticated handshake
   const wss = new WebSocketServer({ server, path: '/ws' });
 

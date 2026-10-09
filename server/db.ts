@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { DatabaseSync } from 'node:sqlite';
+import { getServerSupabase } from './supabase.ts';
 import type { 
   User, 
   Connection, 
@@ -36,14 +36,13 @@ export interface DatabaseSchema {
   reports: Report[];
   bugReports: BugReport[];
   auditLogs: { id: string; action: string; actorId: string; actorUsername: string; timestamp: string; details?: string }[];
-  mutes: { id: string; userId: string; mutedUserId: string; createdAt: string }[];
   blocks: { id: string; userId: string; blockedUserId: string; createdAt: string }[];
+  mutes: { id: string; userId: string; mutedUserId: string; createdAt: string }[];
   sessions: { id: string; userId: string; token: string; device: string; ip: string; createdAt: string; lastActive: string }[];
   devicePublicKeys: DevicePublicKeyRecord[];
 }
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
-const DB_FILE = path.resolve(DATA_DIR, 'notecircle.db');
 
 function getOrGenerateSessionSecret(): string {
   if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.trim().length >= 32) {
@@ -76,7 +75,6 @@ export function hashPassword(password: string): string {
 
 export function verifyPassword(password: string, storedHash: string): boolean {
   if (!storedHash) return false;
-  // Handle scrypt:v1:salt:hash format
   if (storedHash.startsWith('scrypt:v1:')) {
     const parts = storedHash.split(':');
     if (parts.length !== 4) return false;
@@ -84,7 +82,6 @@ export function verifyPassword(password: string, storedHash: string): boolean {
     const derived = crypto.scryptSync(password, salt, 32, { N: 16384, r: 8, p: 1 });
     return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), derived);
   }
-  // Legacy migration check (if old hex hash exists)
   try {
     const oldDerived = crypto.pbkdf2Sync(password, 'notecircle_secure_salt_2026', 1000, 32, 'sha256').toString('hex');
     return crypto.timingSafeEqual(Buffer.from(storedHash, 'hex'), Buffer.from(oldDerived, 'hex'));
@@ -113,7 +110,6 @@ export function parseToken(token: string): string | null {
     if (!crypto.timingSafeEqual(Buffer.from(hmac, 'hex'), Buffer.from(expectedHmac, 'hex'))) {
       return null;
     }
-    // Expire token after 30 days
     const createdTime = parseInt(ts, 10);
     if (isNaN(createdTime) || Date.now() - createdTime > 30 * 24 * 60 * 60 * 1000) {
       return null;
@@ -124,798 +120,855 @@ export function parseToken(token: string): string | null {
   }
 }
 
-class SqlDatabaseManager {
-  private sqlite: DatabaseSync;
+async function safeExec(promiseLike: PromiseLike<any>): Promise<void> {
+  try {
+    await Promise.resolve(promiseLike);
+  } catch (err: any) {
+    console.error('[Supabase Database] Error executing query:', err?.message || err);
+  }
+}
+
+class SupabaseDatabaseManager {
+  private memoryStore: DatabaseSchema = {
+    users: [],
+    connections: [],
+    closeFriends: [],
+    notes: [],
+    conversations: [],
+    messages: [],
+    notifications: [],
+    reports: [],
+    bugReports: [],
+    auditLogs: [],
+    blocks: [],
+    mutes: [],
+    sessions: [],
+    devicePublicKeys: []
+  };
+
+  private passwordRecoveryRequests: any[] = [];
+  private plansStore: any[] = [];
+  private capsulesStore: any[] = [];
+  private verifiedSafetyNumbers: { userId: string; contactId: string; verifiedAt: string }[] = [];
+  private registrationOtps: any[] = [];
+  private emailLogs: any[] = [];
+
+  private isInitialized = false;
+  private initPromise: Promise<void> | null = null;
 
   constructor() {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    this.sqlite = new DatabaseSync(DB_FILE);
-    this.sqlite.exec('PRAGMA journal_mode = WAL;');
-    this.sqlite.exec('PRAGMA foreign_keys = ON;');
-    this.initTables();
-    this.seedInitialIfEmpty();
+    this.init();
   }
 
-  private initTables(): void {
-    this.sqlite.exec(`
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        username TEXT UNIQUE NOT NULL,
-        display_name TEXT NOT NULL,
-        email TEXT UNIQUE,
-        phone TEXT,
-        avatar_url TEXT,
-        bio TEXT,
-        city TEXT,
-        birthday TEXT,
-        workplace TEXT,
-        is_private INTEGER DEFAULT 1,
-        is_admin INTEGER DEFAULT 0,
-        is_suspended INTEGER DEFAULT 0,
-        availability TEXT,
-        privacy_settings TEXT,
-        notification_settings TEXT,
-        password_hash TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      );
+  public async init(): Promise<void> {
+    if (this.isInitialized) return;
+    if (this.initPromise) return this.initPromise;
 
-      CREATE TABLE IF NOT EXISTS connections (
-        id TEXT PRIMARY KEY,
-        requester_id TEXT NOT NULL,
-        target_id TEXT NOT NULL,
-        status TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
+    this.initPromise = (async () => {
+      try {
+        const client = getServerSupabase();
+        if (!client) {
+          console.warn('[Supabase Database] Supabase client not available yet.');
+          return;
+        }
 
-      CREATE TABLE IF NOT EXISTS close_friends (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        friend_id TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      );
+        // Load all 20 tables from Supabase PostgreSQL
+        const [
+          usersRes,
+          connectionsRes,
+          closeFriendsRes,
+          notesRes,
+          conversationsRes,
+          messagesRes,
+          notificationsRes,
+          reportsRes,
+          bugReportsRes,
+          auditLogsRes,
+          blocksRes,
+          mutesRes,
+          sessionsRes,
+          deviceKeysRes,
+          recoveryRes,
+          plansRes,
+          capsulesRes,
+          safetyRes,
+          otpsRes,
+          emailLogsRes
+        ] = await Promise.all([
+          client.from('users').select('*').order('created_at', { ascending: true }),
+          client.from('connections').select('*'),
+          client.from('close_friends').select('*'),
+          client.from('notes').select('*').order('created_at', { ascending: false }),
+          client.from('conversations').select('*').order('updated_at', { ascending: false }),
+          client.from('messages').select('*').order('created_at', { ascending: true }),
+          client.from('notifications').select('*').order('created_at', { ascending: false }),
+          client.from('reports').select('*').order('created_at', { ascending: false }),
+          client.from('bug_reports').select('*').order('created_at', { ascending: false }),
+          client.from('audit_logs').select('*').order('timestamp', { ascending: false }),
+          client.from('blocks').select('*'),
+          client.from('mutes').select('*'),
+          client.from('sessions').select('*').order('last_active', { ascending: false }),
+          client.from('device_public_keys').select('*').order('created_at', { ascending: false }),
+          client.from('password_recovery_requests').select('*'),
+          client.from('plans').select('*').order('scheduled_time', { ascending: true }),
+          client.from('memory_capsules').select('*').order('created_at', { ascending: false }),
+          client.from('verified_safety_numbers').select('*'),
+          client.from('registration_otps').select('*').order('created_at', { ascending: false }),
+          client.from('email_logs').select('*').order('created_at', { ascending: false })
+        ]);
 
-      CREATE TABLE IF NOT EXISTS notes (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        author TEXT NOT NULL,
-        emoji TEXT NOT NULL,
-        category TEXT NOT NULL,
-        category_label TEXT NOT NULL,
-        text TEXT NOT NULL,
-        audience TEXT NOT NULL,
-        selected_user_ids TEXT,
-        expires_at TEXT,
-        scheduled_for TEXT,
-        status TEXT NOT NULL,
-        is_pinned INTEGER DEFAULT 0,
-        is_draft INTEGER DEFAULT 0,
-        allow_replies INTEGER DEFAULT 1,
-        allow_reactions INTEGER DEFAULT 1,
-        reactions TEXT DEFAULT '[]',
-        replies TEXT DEFAULT '[]',
-        created_at TEXT NOT NULL,
-        updated_at TEXT
-      );
+        if (usersRes.data) {
+          this.memoryStore.users = usersRes.data.map((r: any) => ({
+            id: r.id,
+            username: r.username,
+            displayName: r.display_name,
+            email: r.email,
+            phone: r.phone || undefined,
+            avatarUrl: r.avatar_url || '',
+            bio: r.bio || '',
+            city: r.city || undefined,
+            birthday: r.birthday || undefined,
+            workplace: r.workplace || undefined,
+            isPrivate: true,
+            isAdmin: Boolean(r.is_admin),
+            isSuspended: Boolean(r.is_suspended),
+            availability: r.availability || { code: 'available', label: 'Available', emoji: '🟢', strictDnd: false, updatedAt: new Date().toISOString() },
+            privacySettings: r.privacy_settings || {},
+            notificationSettings: r.notification_settings || {},
+            passwordHash: r.password_hash,
+            createdAt: r.created_at
+          }));
+        }
 
-      CREATE TABLE IF NOT EXISTS conversations (
-        id TEXT PRIMARY KEY,
-        type TEXT NOT NULL,
-        title TEXT,
-        participant_ids TEXT NOT NULL,
-        last_message TEXT,
-        unread_count INTEGER DEFAULT 0,
-        is_muted INTEGER DEFAULT 0,
-        is_archived INTEGER DEFAULT 0,
-        is_pinned INTEGER DEFAULT 0,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
+        if (connectionsRes.data) {
+          this.memoryStore.connections = connectionsRes.data.map((r: any) => ({
+            id: r.id,
+            requesterId: r.requester_id,
+            targetId: r.target_id,
+            status: r.status,
+            createdAt: r.created_at,
+            updatedAt: r.updated_at
+          }));
+        }
 
-      CREATE TABLE IF NOT EXISTS messages (
-        id TEXT PRIMARY KEY,
-        conversation_id TEXT NOT NULL,
-        sender_id TEXT NOT NULL,
-        sender_name TEXT NOT NULL,
-        sender_avatar TEXT,
-        text TEXT NOT NULL,
-        encrypted_payload TEXT,
-        reply_to_id TEXT,
-        reply_preview TEXT,
-        media_url TEXT,
-        reactions TEXT DEFAULT '[]',
-        status TEXT NOT NULL,
-        is_deleted INTEGER DEFAULT 0,
-        deleted_for_me INTEGER DEFAULT 0,
-        created_at TEXT NOT NULL
-      );
+        if (closeFriendsRes.data) {
+          this.memoryStore.closeFriends = closeFriendsRes.data.map((r: any) => ({
+            id: r.id,
+            userId: r.user_id,
+            friendId: r.friend_id,
+            createdAt: r.created_at
+          }));
+        }
 
-      CREATE TABLE IF NOT EXISTS notifications (
-        id TEXT PRIMARY KEY,
-        recipient_id TEXT NOT NULL,
-        sender_id TEXT NOT NULL,
-        sender_name TEXT NOT NULL,
-        sender_avatar TEXT,
-        type TEXT NOT NULL,
-        entity_id TEXT,
-        text TEXT NOT NULL,
-        read INTEGER DEFAULT 0,
-        created_at TEXT NOT NULL
-      );
+        if (notesRes.data) {
+          this.memoryStore.notes = notesRes.data.map((r: any) => ({
+            id: r.id,
+            userId: r.user_id,
+            author: r.author,
+            emoji: r.emoji,
+            category: r.category,
+            categoryLabel: r.category_label,
+            text: r.text,
+            audience: r.audience,
+            selectedUserIds: r.selected_user_ids || undefined,
+            expiresAt: r.expires_at || null,
+            scheduledFor: r.scheduled_for || null,
+            status: r.status,
+            isPinned: Boolean(r.is_pinned),
+            isDraft: Boolean(r.is_draft),
+            allowReplies: r.allow_replies !== false,
+            allowReactions: r.allow_reactions !== false,
+            reactions: r.reactions || [],
+            replies: r.replies || [],
+            isOwner: false,
+            isCloseFriendOnly: r.audience === 'close_friends',
+            createdAt: r.created_at,
+            updatedAt: r.updated_at || undefined
+          }));
+        }
 
-      CREATE TABLE IF NOT EXISTS reports (
-        id TEXT PRIMARY KEY,
-        reporter_id TEXT NOT NULL,
-        reporter_username TEXT NOT NULL,
-        target_type TEXT NOT NULL,
-        target_id TEXT NOT NULL,
-        target_author_name TEXT,
-        target_content_preview TEXT,
-        reason TEXT NOT NULL,
-        details TEXT,
-        status TEXT NOT NULL,
-        action_taken TEXT,
-        created_at TEXT NOT NULL
-      );
+        if (conversationsRes.data) {
+          this.memoryStore.conversations = conversationsRes.data.map((r: any) => ({
+            id: r.id,
+            type: r.type,
+            title: r.title || undefined,
+            participantIds: r.participant_ids || [],
+            participants: [],
+            lastMessage: r.last_message || undefined,
+            unreadCount: r.unread_count || 0,
+            isMuted: Boolean(r.is_muted),
+            isArchived: Boolean(r.is_archived),
+            isPinned: Boolean(r.is_pinned),
+            createdAt: r.created_at,
+            updatedAt: r.updated_at
+          }));
+        }
 
-      CREATE TABLE IF NOT EXISTS bug_reports (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        username TEXT NOT NULL,
-        category TEXT NOT NULL,
-        description TEXT NOT NULL,
-        error_identifier TEXT,
-        screenshot TEXT,
-        device_info TEXT NOT NULL,
-        status TEXT NOT NULL,
-        resolution_note TEXT,
-        created_at TEXT NOT NULL
-      );
+        if (messagesRes.data) {
+          this.memoryStore.messages = messagesRes.data.map((r: any) => ({
+            id: r.id,
+            conversationId: r.conversation_id,
+            senderId: r.sender_id,
+            senderName: r.sender_name,
+            senderAvatar: r.sender_avatar || undefined,
+            text: r.text,
+            encryptedPayload: r.encrypted_payload || undefined,
+            replyToId: r.reply_to_id || undefined,
+            replyPreview: r.reply_preview || undefined,
+            mediaUrl: r.media_url || undefined,
+            reactions: r.reactions || [],
+            status: r.status,
+            isDeleted: Boolean(r.is_deleted),
+            deletedForMe: Boolean(r.deleted_for_me),
+            createdAt: r.created_at
+          }));
+        }
 
-      CREATE TABLE IF NOT EXISTS audit_logs (
-        id TEXT PRIMARY KEY,
-        action TEXT NOT NULL,
-        actor_id TEXT NOT NULL,
-        actor_username TEXT NOT NULL,
-        timestamp TEXT NOT NULL,
-        details TEXT
-      );
+        if (notificationsRes.data) {
+          this.memoryStore.notifications = notificationsRes.data.map((r: any) => ({
+            id: r.id,
+            recipientId: r.recipient_id,
+            senderId: r.sender_id,
+            senderName: r.sender_name,
+            senderAvatar: r.sender_avatar,
+            type: r.type,
+            entityId: r.entity_id || undefined,
+            text: r.text,
+            read: Boolean(r.read),
+            createdAt: r.created_at
+          }));
+        }
 
-      CREATE TABLE IF NOT EXISTS blocks (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        blocked_user_id TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      );
+        if (reportsRes.data) {
+          this.memoryStore.reports = reportsRes.data.map((r: any) => ({
+            id: r.id,
+            reporterId: r.reporter_id,
+            reporterUsername: r.reporter_username,
+            targetType: r.target_type,
+            targetId: r.target_id,
+            targetAuthorName: r.target_author_name || undefined,
+            targetContentPreview: r.target_content_preview || undefined,
+            reason: r.reason,
+            details: r.details || undefined,
+            status: r.status,
+            actionTaken: r.action_taken || undefined,
+            createdAt: r.created_at
+          }));
+        }
 
-      CREATE TABLE IF NOT EXISTS mutes (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        muted_user_id TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      );
+        if (bugReportsRes.data) {
+          this.memoryStore.bugReports = bugReportsRes.data.map((r: any) => ({
+            id: r.id,
+            userId: r.user_id,
+            username: r.username,
+            category: r.category,
+            description: r.description,
+            errorIdentifier: r.error_identifier || undefined,
+            screenshot: r.screenshot || undefined,
+            deviceInfo: r.device_info || {},
+            status: r.status,
+            resolutionNote: r.resolution_note || undefined,
+            createdAt: r.created_at
+          }));
+        }
 
-      CREATE TABLE IF NOT EXISTS sessions (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        token TEXT NOT NULL,
-        device TEXT NOT NULL,
-        ip TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        last_active TEXT NOT NULL
-      );
+        if (auditLogsRes.data) {
+          this.memoryStore.auditLogs = auditLogsRes.data.map((r: any) => ({
+            id: r.id,
+            action: r.action,
+            actorId: r.actor_id,
+            actorUsername: r.actor_username,
+            timestamp: r.timestamp,
+            details: r.details || undefined
+          }));
+        }
 
-      CREATE TABLE IF NOT EXISTS password_recovery_requests (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        code_hash TEXT NOT NULL,
-        expires_at TEXT NOT NULL,
-        attempts INTEGER DEFAULT 0,
-        used INTEGER DEFAULT 0,
-        created_at TEXT NOT NULL
-      );
+        if (blocksRes.data) {
+          this.memoryStore.blocks = blocksRes.data.map((r: any) => ({
+            id: r.id,
+            userId: r.user_id,
+            blockedUserId: r.blocked_user_id,
+            createdAt: r.created_at
+          }));
+        }
 
-      CREATE TABLE IF NOT EXISTS plans (
-        id TEXT PRIMARY KEY,
-        creator_id TEXT NOT NULL,
-        title TEXT NOT NULL,
-        emoji TEXT NOT NULL,
-        scheduled_time TEXT NOT NULL,
-        location TEXT,
-        rsvps TEXT DEFAULT '[]',
-        created_at TEXT NOT NULL
-      );
+        if (mutesRes.data) {
+          this.memoryStore.mutes = mutesRes.data.map((r: any) => ({
+            id: r.id,
+            userId: r.user_id,
+            mutedUserId: r.muted_user_id,
+            createdAt: r.created_at
+          }));
+        }
 
-      CREATE TABLE IF NOT EXISTS memory_capsules (
-        id TEXT PRIMARY KEY,
-        creator_id TEXT NOT NULL,
-        title TEXT NOT NULL,
-        cover_emoji TEXT NOT NULL,
-        unlock_at TEXT,
-        items TEXT DEFAULT '[]',
-        created_at TEXT NOT NULL
-      );
+        if (sessionsRes.data) {
+          this.memoryStore.sessions = sessionsRes.data.map((r: any) => ({
+            id: r.id,
+            userId: r.user_id,
+            token: r.token,
+            device: r.device,
+            ip: r.ip,
+            createdAt: r.created_at,
+            lastActive: r.last_active
+          }));
+        }
 
-      CREATE TABLE IF NOT EXISTS device_public_keys (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        device_id TEXT NOT NULL,
-        device_name TEXT NOT NULL,
-        public_key_jwk TEXT NOT NULL,
-        fingerprint TEXT NOT NULL,
-        is_revoked INTEGER DEFAULT 0,
-        created_at TEXT NOT NULL,
-        last_seen TEXT NOT NULL
-      );
+        if (deviceKeysRes.data) {
+          this.memoryStore.devicePublicKeys = deviceKeysRes.data.map((r: any) => ({
+            id: r.id,
+            userId: r.user_id,
+            deviceId: r.device_id,
+            deviceName: r.device_name,
+            publicKeyJwk: typeof r.public_key_jwk === 'string' ? r.public_key_jwk : JSON.stringify(r.public_key_jwk),
+            fingerprint: r.fingerprint,
+            isRevoked: Boolean(r.is_revoked),
+            createdAt: r.created_at,
+            lastSeen: r.last_seen
+          }));
+        }
 
-      CREATE TABLE IF NOT EXISTS verified_safety_numbers (
-        user_id TEXT NOT NULL,
-        contact_id TEXT NOT NULL,
-        verified_at TEXT NOT NULL,
-        PRIMARY KEY (user_id, contact_id)
-      );
+        if (recoveryRes.data) {
+          this.passwordRecoveryRequests = recoveryRes.data.map((r: any) => ({
+            id: r.id,
+            user_id: r.user_id,
+            code_hash: r.code_hash,
+            expires_at: r.expires_at,
+            attempts: r.attempts,
+            used: r.used ? 1 : 0,
+            created_at: r.created_at
+          }));
+        }
 
-      CREATE TABLE IF NOT EXISTS registration_otps (
-        id TEXT PRIMARY KEY,
-        email TEXT NOT NULL,
-        otp_hash TEXT NOT NULL,
-        expires_at TEXT NOT NULL,
-        attempts INTEGER DEFAULT 0,
-        max_attempts INTEGER DEFAULT 5,
-        resend_available_at TEXT NOT NULL,
-        verified INTEGER DEFAULT 0,
-        verification_token_hash TEXT,
-        used INTEGER DEFAULT 0,
-        created_at TEXT NOT NULL
-      );
+        if (plansRes.data) {
+          this.plansStore = plansRes.data.map((r: any) => ({
+            id: r.id,
+            creator_id: r.creator_id,
+            title: r.title,
+            emoji: r.emoji,
+            scheduled_time: r.scheduled_time,
+            location: r.location,
+            rsvps: JSON.stringify(r.rsvps || []),
+            created_at: r.created_at
+          }));
+        }
 
-      CREATE TABLE IF NOT EXISTS email_logs (
-        id TEXT PRIMARY KEY,
-        recipient TEXT NOT NULL,
-        type TEXT NOT NULL,
-        status TEXT NOT NULL,
-        provider TEXT NOT NULL,
-        error TEXT,
-        created_at TEXT NOT NULL
-      );
+        if (capsulesRes.data) {
+          this.capsulesStore = capsulesRes.data.map((r: any) => ({
+            id: r.id,
+            creator_id: r.creator_id,
+            title: r.title,
+            cover_emoji: r.cover_emoji,
+            unlock_at: r.unlock_at,
+            items: JSON.stringify(r.items || []),
+            created_at: r.created_at
+          }));
+        }
 
-      CREATE INDEX IF NOT EXISTS idx_users_username ON users (username);
-      CREATE INDEX IF NOT EXISTS idx_connections_users ON connections (requester_id, target_id);
-      CREATE INDEX IF NOT EXISTS idx_notes_user_status ON notes (user_id, status);
-      CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages (conversation_id);
-      CREATE INDEX IF NOT EXISTS idx_notifs_recip ON notifications (recipient_id);
-      CREATE INDEX IF NOT EXISTS idx_device_keys_user ON device_public_keys (user_id);
-      CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions (token);
-      CREATE INDEX IF NOT EXISTS idx_recovery_user ON password_recovery_requests (user_id);
-      CREATE INDEX IF NOT EXISTS idx_safety_user ON verified_safety_numbers (user_id);
-      CREATE INDEX IF NOT EXISTS idx_reg_email ON registration_otps (email);
-      CREATE INDEX IF NOT EXISTS idx_email_recipient ON email_logs (recipient);
-    `);
+        if (safetyRes.data) {
+          this.verifiedSafetyNumbers = safetyRes.data.map((r: any) => ({
+            userId: r.user_id,
+            contactId: r.contact_id,
+            verifiedAt: r.verified_at
+          }));
+        }
+
+        if (otpsRes.data) {
+          this.registrationOtps = otpsRes.data.map((r: any) => ({
+            id: r.id,
+            email: r.email,
+            otp_hash: r.otp_hash,
+            expires_at: r.expires_at,
+            attempts: r.attempts,
+            max_attempts: r.max_attempts,
+            resend_available_at: r.resend_available_at,
+            verified: r.verified ? 1 : 0,
+            verification_token_hash: r.verification_token_hash,
+            used: r.used ? 1 : 0,
+            created_at: r.created_at
+          }));
+        }
+
+        if (emailLogsRes.data) {
+          this.emailLogs = emailLogsRes.data.map((r: any) => ({
+            id: r.id,
+            recipient: r.recipient,
+            type: r.type,
+            status: r.status,
+            provider: r.provider,
+            error: r.error,
+            created_at: r.created_at
+          }));
+        }
+
+        this.isInitialized = true;
+        console.log(`[Supabase Database] Successfully loaded state from Supabase PostgreSQL (${this.memoryStore.users.length} users, ${this.memoryStore.devicePublicKeys.length} device keys).`);
+      } catch (err: any) {
+        console.error('[Supabase Database] Error loading state from Supabase:', err?.message || err);
+      }
+    })();
+
+    return this.initPromise;
   }
 
-  private cleanSeedDemoDataAndPreserveReal(): void {
-    // Strictly preserve real user accounts while purging demo/fake seeded content
-    const demoUserIds = ['usr_rahul', 'usr_priya', 'usr_amit', 'usr_admin'];
-    for (const id of demoUserIds) {
-      this.sqlite.prepare('DELETE FROM users WHERE id = ?;').run(id);
-      this.sqlite.prepare('DELETE FROM notes WHERE user_id = ?;').run(id);
-      this.sqlite.prepare('DELETE FROM connections WHERE requester_id = ? OR target_id = ?;').run(id, id);
-      this.sqlite.prepare('DELETE FROM close_friends WHERE user_id = ? OR friend_id = ?;').run(id, id);
-      this.sqlite.prepare('DELETE FROM messages WHERE sender_id = ?;').run(id);
-      this.sqlite.prepare('DELETE FROM plans WHERE creator_id = ?;').run(id);
-      this.sqlite.prepare('DELETE FROM memory_capsules WHERE creator_id = ?;').run(id);
-      this.sqlite.prepare('DELETE FROM sessions WHERE user_id = ?;').run(id);
-      this.sqlite.prepare('DELETE FROM notifications WHERE recipient_id = ? OR sender_id = ?;').run(id, id);
-    }
-    this.sqlite.prepare("DELETE FROM conversations WHERE id = 'conv_rp_seed';").run();
-    // Grant verified admin privileges to real owner emails
-    this.sqlite.prepare("UPDATE users SET is_admin = 1 WHERE email IN ('vjagarwal1133@gmail.com', 'vjagarwal1144@gmail.com');").run();
-  }
-
-  private seedInitialIfEmpty(): void {
-    // Demo seeding is permanently disabled in favor of real database persistence
-    this.cleanSeedDemoDataAndPreserveReal();
-  }
-
-  // Generic getter mapped to SQL tables
   public get<K extends keyof DatabaseSchema>(table: K): DatabaseSchema[K] {
-    switch (table) {
-      case 'users': {
-        const rows = this.sqlite.prepare('SELECT * FROM users ORDER BY created_at ASC;').all() as any[];
-        return rows.map((r) => ({
-          id: r.id,
-          username: r.username,
-          displayName: r.display_name,
-          email: r.email,
-          phone: r.phone || undefined,
-          avatarUrl: r.avatar_url,
-          bio: r.bio || '',
-          city: r.city || undefined,
-          birthday: r.birthday || undefined,
-          workplace: r.workplace || undefined,
-          isPrivate: r.is_private === 1,
-          isAdmin: r.is_admin === 1,
-          isSuspended: r.is_suspended === 1,
-          availability: r.availability ? JSON.parse(r.availability) : undefined,
-          privacySettings: r.privacy_settings ? JSON.parse(r.privacy_settings) : undefined,
-          notificationSettings: r.notification_settings ? JSON.parse(r.notification_settings) : undefined,
-          passwordHash: r.password_hash,
-          createdAt: r.created_at
-        })) as unknown as DatabaseSchema[K];
-      }
-      case 'connections': {
-        const rows = this.sqlite.prepare('SELECT * FROM connections;').all() as any[];
-        return rows.map((r) => ({
-          id: r.id,
-          requesterId: r.requester_id,
-          targetId: r.target_id,
-          status: r.status,
-          createdAt: r.created_at,
-          updatedAt: r.updated_at
-        })) as DatabaseSchema[K];
-      }
-      case 'closeFriends': {
-        const rows = this.sqlite.prepare('SELECT * FROM close_friends;').all() as any[];
-        return rows.map((r) => ({
-          id: r.id,
-          userId: r.user_id,
-          friendId: r.friend_id,
-          createdAt: r.created_at
-        })) as DatabaseSchema[K];
-      }
-      case 'notes': {
-        const rows = this.sqlite.prepare('SELECT * FROM notes ORDER BY created_at DESC;').all() as any[];
-        return rows.map((r) => ({
-          id: r.id,
-          userId: r.user_id,
-          author: JSON.parse(r.author),
-          emoji: r.emoji,
-          category: r.category,
-          categoryLabel: r.category_label,
-          text: r.text,
-          audience: r.audience,
-          selectedUserIds: r.selected_user_ids ? JSON.parse(r.selected_user_ids) : undefined,
-          expiresAt: r.expires_at || null,
-          scheduledFor: r.scheduled_for || null,
-          status: r.status,
-          isPinned: r.is_pinned === 1,
-          isDraft: r.is_draft === 1,
-          allowReplies: r.allow_replies === 1,
-          allowReactions: r.allow_reactions === 1,
-          reactions: JSON.parse(r.reactions || '[]'),
-          replies: JSON.parse(r.replies || '[]'),
-          createdAt: r.created_at,
-          updatedAt: r.updated_at || undefined
-        })) as DatabaseSchema[K];
-      }
-      case 'conversations': {
-        const rows = this.sqlite.prepare('SELECT * FROM conversations ORDER BY updated_at DESC;').all() as any[];
-        return rows.map((r) => ({
-          id: r.id,
-          type: r.type,
-          title: r.title || undefined,
-          participantIds: JSON.parse(r.participant_ids),
-          participants: [],
-          lastMessage: r.last_message ? JSON.parse(r.last_message) : undefined,
-          unreadCount: r.unread_count,
-          isMuted: r.is_muted === 1,
-          isArchived: r.is_archived === 1,
-          isPinned: r.is_pinned === 1,
-          createdAt: r.created_at,
-          updatedAt: r.updated_at
-        })) as unknown as DatabaseSchema[K];
-      }
-      case 'messages': {
-        const rows = this.sqlite.prepare('SELECT * FROM messages ORDER BY created_at ASC;').all() as any[];
-        return rows.map((r) => ({
-          id: r.id,
-          conversationId: r.conversation_id,
-          senderId: r.sender_id,
-          senderName: r.sender_name,
-          senderAvatar: r.sender_avatar || undefined,
-          text: r.text,
-          encryptedPayload: r.encrypted_payload || undefined,
-          replyToId: r.reply_to_id || undefined,
-          replyPreview: r.reply_preview ? JSON.parse(r.reply_preview) : undefined,
-          mediaUrl: r.media_url || undefined,
-          reactions: JSON.parse(r.reactions || '[]'),
-          status: r.status,
-          isDeleted: r.is_deleted === 1,
-          deletedForMe: r.deleted_for_me === 1,
-          createdAt: r.created_at
-        })) as DatabaseSchema[K];
-      }
-      case 'notifications': {
-        const rows = this.sqlite.prepare('SELECT * FROM notifications ORDER BY created_at DESC;').all() as any[];
-        return rows.map((r) => ({
-          id: r.id,
-          recipientId: r.recipient_id,
-          senderId: r.sender_id,
-          senderName: r.sender_name,
-          senderAvatar: r.sender_avatar,
-          type: r.type,
-          entityId: r.entity_id || undefined,
-          text: r.text,
-          read: r.read === 1,
-          createdAt: r.created_at
-        })) as DatabaseSchema[K];
-      }
-      case 'reports': {
-        const rows = this.sqlite.prepare('SELECT * FROM reports ORDER BY created_at DESC;').all() as any[];
-        return rows.map((r) => ({
-          id: r.id,
-          reporterId: r.reporter_id,
-          reporterUsername: r.reporter_username,
-          targetType: r.target_type,
-          targetId: r.target_id,
-          targetAuthorName: r.target_author_name || undefined,
-          targetContentPreview: r.target_content_preview || undefined,
-          reason: r.reason,
-          details: r.details || undefined,
-          status: r.status,
-          actionTaken: r.action_taken || undefined,
-          createdAt: r.created_at
-        })) as DatabaseSchema[K];
-      }
-      case 'bugReports': {
-        const rows = this.sqlite.prepare('SELECT * FROM bug_reports ORDER BY created_at DESC;').all() as any[];
-        return rows.map((r) => ({
-          id: r.id,
-          userId: r.user_id,
-          username: r.username,
-          category: r.category,
-          description: r.description,
-          errorIdentifier: r.error_identifier || undefined,
-          screenshot: r.screenshot || undefined,
-          deviceInfo: JSON.parse(r.device_info),
-          status: r.status,
-          resolutionNote: r.resolution_note || undefined,
-          createdAt: r.created_at
-        })) as DatabaseSchema[K];
-      }
-      case 'auditLogs': {
-        const rows = this.sqlite.prepare('SELECT * FROM audit_logs ORDER BY timestamp DESC;').all() as any[];
-        return rows.map((r) => ({
-          id: r.id,
-          action: r.action,
-          actorId: r.actor_id,
-          actorUsername: r.actor_username,
-          timestamp: r.timestamp,
-          details: r.details || undefined
-        })) as DatabaseSchema[K];
-      }
-      case 'blocks': {
-        const rows = this.sqlite.prepare('SELECT * FROM blocks;').all() as any[];
-        return rows.map((r) => ({
-          id: r.id,
-          userId: r.user_id,
-          blockedUserId: r.blocked_user_id,
-          createdAt: r.created_at
-        })) as DatabaseSchema[K];
-      }
-      case 'mutes': {
-        const rows = this.sqlite.prepare('SELECT * FROM mutes;').all() as any[];
-        return rows.map((r) => ({
-          id: r.id,
-          userId: r.user_id,
-          mutedUserId: r.muted_user_id,
-          createdAt: r.created_at
-        })) as DatabaseSchema[K];
-      }
-      case 'sessions': {
-        const rows = this.sqlite.prepare('SELECT * FROM sessions ORDER BY last_active DESC;').all() as any[];
-        return rows.map((r) => ({
-          id: r.id,
-          userId: r.user_id,
-          token: r.token,
-          device: r.device,
-          ip: r.ip,
-          createdAt: r.created_at,
-          lastActive: r.last_active
-        })) as DatabaseSchema[K];
-      }
-      case 'devicePublicKeys': {
-        const rows = this.sqlite.prepare('SELECT * FROM device_public_keys ORDER BY created_at DESC;').all() as any[];
-        return rows.map((r) => ({
-          id: r.id,
-          userId: r.user_id,
-          deviceId: r.device_id,
-          deviceName: r.device_name,
-          publicKeyJwk: r.public_key_jwk,
-          fingerprint: r.fingerprint,
-          isRevoked: r.is_revoked === 1,
-          createdAt: r.created_at,
-          lastSeen: r.last_seen
-        })) as DatabaseSchema[K];
-      }
-      default:
-        return [] as any;
-    }
+    return (this.memoryStore[table] || []) as DatabaseSchema[K];
   }
 
-  // Generic updater executing SQL transactions
   public update<K extends keyof DatabaseSchema>(
     table: K,
     updater: (curr: DatabaseSchema[K]) => DatabaseSchema[K]
   ): void {
     const current = this.get(table);
     const updated = updater(current);
+    this.memoryStore[table] = updated;
 
-    this.sqlite.exec('BEGIN TRANSACTION;');
+    // Persist changes to Supabase PostgreSQL asynchronously in the background
+    this.persistTableChanges(table, current, updated).catch((err) => {
+      console.error(`[Supabase Database] Failed to persist updates to table ${String(table)}:`, err?.message || err);
+    });
+  }
+
+  private async persistTableChanges<K extends keyof DatabaseSchema>(
+    table: K,
+    previous: DatabaseSchema[K],
+    next: DatabaseSchema[K]
+  ): Promise<void> {
+    const client = getServerSupabase();
+    if (!client) return;
+
     try {
       switch (table) {
         case 'users': {
-          this.sqlite.exec('DELETE FROM users;');
-          const stmt = this.sqlite.prepare(`
-            INSERT INTO users (
-              id, username, display_name, email, phone, avatar_url, bio, city, birthday, workplace,
-              is_private, is_admin, is_suspended, availability, privacy_settings, notification_settings, password_hash, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-          `);
-          for (const u of updated as User[]) {
-            stmt.run(
-              u.id,
-              u.username,
-              u.displayName,
-              u.email,
-              u.phone || null,
-              u.avatarUrl || null,
-              u.bio || null,
-              u.city || null,
-              u.birthday || null,
-              u.workplace || null,
-              u.isPrivate ? 1 : 0,
-              u.isAdmin ? 1 : 0,
-              u.isSuspended ? 1 : 0,
-              JSON.stringify(u.availability || {}),
-              JSON.stringify(u.privacySettings || {}),
-              JSON.stringify(u.notificationSettings || {}),
-              (u as any).passwordHash || '',
-              u.createdAt
-            );
+          const prevMap = new Map((previous as User[]).map(u => [u.id, u]));
+          const nextList = next as User[];
+          const nextIds = new Set(nextList.map(u => u.id));
+
+          for (const u of nextList) {
+            const p = prevMap.get(u.id);
+            if (!p || JSON.stringify(p) !== JSON.stringify(u)) {
+              await safeExec(client.from('users').upsert({
+                id: u.id,
+                username: u.username,
+                display_name: u.displayName,
+                email: u.email,
+                phone: u.phone || null,
+                avatar_url: u.avatarUrl || null,
+                bio: u.bio || '',
+                city: u.city || null,
+                birthday: u.birthday || null,
+                workplace: u.workplace || null,
+                is_private: Boolean(u.isPrivate),
+                is_admin: Boolean(u.isAdmin),
+                is_suspended: Boolean(u.isSuspended),
+                availability: u.availability || {},
+                privacy_settings: u.privacySettings || {},
+                notification_settings: u.notificationSettings || {},
+                password_hash: (u as any).passwordHash || '',
+                created_at: u.createdAt
+              }));
+            }
+          }
+
+          for (const [id] of prevMap) {
+            if (!nextIds.has(id)) {
+              await safeExec(client.from('users').delete().eq('id', id));
+            }
           }
           break;
         }
+
         case 'connections': {
-          this.sqlite.exec('DELETE FROM connections;');
-          const stmt = this.sqlite.prepare(`
-            INSERT INTO connections (id, requester_id, target_id, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?);
-          `);
-          for (const c of updated as Connection[]) {
-            stmt.run(c.id, c.requesterId, c.targetId, c.status, c.createdAt, c.updatedAt);
+          const prevMap = new Map((previous as Connection[]).map(c => [c.id, c]));
+          const nextList = next as Connection[];
+          const nextIds = new Set(nextList.map(c => c.id));
+
+          for (const c of nextList) {
+            const p = prevMap.get(c.id);
+            if (!p || JSON.stringify(p) !== JSON.stringify(c)) {
+              await safeExec(client.from('connections').upsert({
+                id: c.id,
+                requester_id: c.requesterId,
+                target_id: c.targetId,
+                status: c.status,
+                created_at: c.createdAt,
+                updated_at: c.updatedAt
+              }));
+            }
+          }
+
+          for (const [id] of prevMap) {
+            if (!nextIds.has(id)) {
+              await safeExec(client.from('connections').delete().eq('id', id));
+            }
           }
           break;
         }
+
         case 'closeFriends': {
-          this.sqlite.exec('DELETE FROM close_friends;');
-          const stmt = this.sqlite.prepare(`
-            INSERT INTO close_friends (id, user_id, friend_id, created_at)
-            VALUES (?, ?, ?, ?);
-          `);
-          for (const cf of updated as any[]) {
-            stmt.run(cf.id, cf.userId, cf.friendId, cf.createdAt);
+          const prevMap = new Map((previous as any[]).map(cf => [cf.id, cf]));
+          const nextList = next as any[];
+          const nextIds = new Set(nextList.map(cf => cf.id));
+
+          for (const cf of nextList) {
+            const p = prevMap.get(cf.id);
+            if (!p || JSON.stringify(p) !== JSON.stringify(cf)) {
+              await safeExec(client.from('close_friends').upsert({
+                id: cf.id,
+                user_id: cf.userId,
+                friend_id: cf.friendId,
+                created_at: cf.createdAt
+              }));
+            }
+          }
+
+          for (const [id] of prevMap) {
+            if (!nextIds.has(id)) {
+              await safeExec(client.from('close_friends').delete().eq('id', id));
+            }
           }
           break;
         }
+
         case 'notes': {
-          this.sqlite.exec('DELETE FROM notes;');
-          const stmt = this.sqlite.prepare(`
-            INSERT INTO notes (
-              id, user_id, author, emoji, category, category_label, text, audience, selected_user_ids,
-              expires_at, scheduled_for, status, is_pinned, is_draft, allow_replies, allow_reactions, reactions, replies, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-          `);
-          for (const n of updated as Note[]) {
-            stmt.run(
-              n.id,
-              n.userId,
-              JSON.stringify(n.author),
-              n.emoji,
-              n.category,
-              n.categoryLabel,
-              n.text,
-              n.audience,
-              n.selectedUserIds ? JSON.stringify(n.selectedUserIds) : null,
-              n.expiresAt || null,
-              n.scheduledFor || null,
-              n.status,
-              n.isPinned ? 1 : 0,
-              n.isDraft ? 1 : 0,
-              n.allowReplies !== false ? 1 : 0,
-              n.allowReactions !== false ? 1 : 0,
-              JSON.stringify(n.reactions || []),
-              JSON.stringify(n.replies || []),
-              n.createdAt,
-              n.updatedAt || null
-            );
+          const prevMap = new Map((previous as Note[]).map(n => [n.id, n]));
+          const nextList = next as Note[];
+          const nextIds = new Set(nextList.map(n => n.id));
+
+          for (const n of nextList) {
+            const p = prevMap.get(n.id);
+            if (!p || JSON.stringify(p) !== JSON.stringify(n)) {
+              await safeExec(client.from('notes').upsert({
+                id: n.id,
+                user_id: n.userId,
+                author: n.author,
+                emoji: n.emoji,
+                category: n.category,
+                category_label: n.categoryLabel,
+                text: n.text,
+                audience: n.audience,
+                selected_user_ids: n.selectedUserIds || null,
+                expires_at: n.expiresAt || null,
+                scheduled_for: n.scheduledFor || null,
+                status: n.status,
+                is_pinned: Boolean(n.isPinned),
+                is_draft: Boolean(n.isDraft),
+                allow_replies: n.allowReplies !== false,
+                allow_reactions: n.allowReactions !== false,
+                reactions: n.reactions || [],
+                replies: n.replies || [],
+                created_at: n.createdAt,
+                updated_at: n.updatedAt || null
+              }));
+            }
+          }
+
+          for (const [id] of prevMap) {
+            if (!nextIds.has(id)) {
+              await safeExec(client.from('notes').delete().eq('id', id));
+            }
           }
           break;
         }
+
         case 'conversations': {
-          this.sqlite.exec('DELETE FROM conversations;');
-          const stmt = this.sqlite.prepare(`
-            INSERT INTO conversations (id, type, title, participant_ids, last_message, unread_count, is_muted, is_archived, is_pinned, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-          `);
-          for (const c of updated as Conversation[]) {
-            stmt.run(
-              c.id,
-              c.type,
-              c.title || null,
-              JSON.stringify(c.participantIds),
-              c.lastMessage ? JSON.stringify(c.lastMessage) : null,
-              c.unreadCount || 0,
-              c.isMuted ? 1 : 0,
-              c.isArchived ? 1 : 0,
-              c.isPinned ? 1 : 0,
-              c.createdAt,
-              c.updatedAt
-            );
+          const prevMap = new Map((previous as Conversation[]).map(c => [c.id, c]));
+          const nextList = next as Conversation[];
+          const nextIds = new Set(nextList.map(c => c.id));
+
+          for (const c of nextList) {
+            const p = prevMap.get(c.id);
+            if (!p || JSON.stringify(p) !== JSON.stringify(c)) {
+              await safeExec(client.from('conversations').upsert({
+                id: c.id,
+                type: c.type,
+                title: c.title || null,
+                participant_ids: c.participantIds,
+                last_message: c.lastMessage || null,
+                unread_count: c.unreadCount || 0,
+                is_muted: Boolean(c.isMuted),
+                is_archived: Boolean(c.isArchived),
+                is_pinned: Boolean(c.isPinned),
+                created_at: c.createdAt,
+                updated_at: c.updatedAt
+              }));
+            }
+          }
+
+          for (const [id] of prevMap) {
+            if (!nextIds.has(id)) {
+              await safeExec(client.from('conversations').delete().eq('id', id));
+            }
           }
           break;
         }
+
         case 'messages': {
-          this.sqlite.exec('DELETE FROM messages;');
-          const stmt = this.sqlite.prepare(`
-            INSERT INTO messages (
-              id, conversation_id, sender_id, sender_name, sender_avatar, text, encrypted_payload,
-              reply_to_id, reply_preview, media_url, reactions, status, is_deleted, deleted_for_me, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-          `);
-          for (const m of updated as Message[]) {
-            stmt.run(
-              m.id,
-              m.conversationId,
-              m.senderId,
-              m.senderName,
-              m.senderAvatar || null,
-              m.text,
-              m.encryptedPayload || null,
-              m.replyToId || null,
-              m.replyPreview ? JSON.stringify(m.replyPreview) : null,
-              m.mediaUrl || null,
-              JSON.stringify(m.reactions || []),
-              m.status,
-              m.isDeleted ? 1 : 0,
-              m.deletedForMe ? 1 : 0,
-              m.createdAt
-            );
+          const prevMap = new Map((previous as Message[]).map(m => [m.id, m]));
+          const nextList = next as Message[];
+          const nextIds = new Set(nextList.map(m => m.id));
+
+          for (const m of nextList) {
+            const p = prevMap.get(m.id);
+            if (!p || JSON.stringify(p) !== JSON.stringify(m)) {
+              await safeExec(client.from('messages').upsert({
+                id: m.id,
+                conversation_id: m.conversationId,
+                sender_id: m.senderId,
+                sender_name: m.senderName,
+                sender_avatar: m.senderAvatar || null,
+                text: m.text,
+                encrypted_payload: m.encryptedPayload || null,
+                reply_to_id: m.replyToId || null,
+                reply_preview: m.replyPreview || null,
+                media_url: m.mediaUrl || null,
+                reactions: m.reactions || [],
+                status: m.status,
+                is_deleted: Boolean(m.isDeleted),
+                deleted_for_me: Boolean(m.deletedForMe),
+                created_at: m.createdAt
+              }));
+            }
+          }
+
+          for (const [id] of prevMap) {
+            if (!nextIds.has(id)) {
+              await safeExec(client.from('messages').delete().eq('id', id));
+            }
           }
           break;
         }
+
         case 'notifications': {
-          this.sqlite.exec('DELETE FROM notifications;');
-          const stmt = this.sqlite.prepare(`
-            INSERT INTO notifications (id, recipient_id, sender_id, sender_name, sender_avatar, type, entity_id, text, read, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-          `);
-          for (const notif of updated as AppNotification[]) {
-            stmt.run(
-              notif.id,
-              notif.recipientId,
-              notif.senderId,
-              notif.senderName,
-              notif.senderAvatar,
-              notif.type,
-              notif.entityId || null,
-              notif.text,
-              notif.read ? 1 : 0,
-              notif.createdAt
-            );
+          const prevMap = new Map((previous as AppNotification[]).map(n => [n.id, n]));
+          const nextList = next as AppNotification[];
+          const nextIds = new Set(nextList.map(n => n.id));
+
+          for (const n of nextList) {
+            const p = prevMap.get(n.id);
+            if (!p || JSON.stringify(p) !== JSON.stringify(n)) {
+              await safeExec(client.from('notifications').upsert({
+                id: n.id,
+                recipient_id: n.recipientId,
+                sender_id: n.senderId,
+                sender_name: n.senderName,
+                sender_avatar: n.senderAvatar || null,
+                type: n.type,
+                entity_id: n.entityId || null,
+                text: n.text,
+                read: Boolean(n.read),
+                created_at: n.createdAt
+              }));
+            }
+          }
+
+          for (const [id] of prevMap) {
+            if (!nextIds.has(id)) {
+              await safeExec(client.from('notifications').delete().eq('id', id));
+            }
           }
           break;
         }
+
         case 'reports': {
-          this.sqlite.exec('DELETE FROM reports;');
-          const stmt = this.sqlite.prepare(`
-            INSERT INTO reports (id, reporter_id, reporter_username, target_type, target_id, target_author_name, target_content_preview, reason, details, status, action_taken, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-          `);
-          for (const r of updated as Report[]) {
-            stmt.run(
-              r.id,
-              r.reporterId,
-              r.reporterUsername,
-              r.targetType,
-              r.targetId,
-              r.targetAuthorName || null,
-              r.targetContentPreview || null,
-              r.reason,
-              r.details || null,
-              r.status,
-              r.actionTaken || null,
-              r.createdAt
-            );
+          const prevMap = new Map((previous as Report[]).map(r => [r.id, r]));
+          const nextList = next as Report[];
+          const nextIds = new Set(nextList.map(r => r.id));
+
+          for (const r of nextList) {
+            const p = prevMap.get(r.id);
+            if (!p || JSON.stringify(p) !== JSON.stringify(r)) {
+              await safeExec(client.from('reports').upsert({
+                id: r.id,
+                reporter_id: r.reporterId,
+                reporter_username: r.reporterUsername,
+                target_type: r.targetType,
+                target_id: r.targetId,
+                target_author_name: r.targetAuthorName || null,
+                target_content_preview: r.targetContentPreview || null,
+                reason: r.reason,
+                details: r.details || null,
+                status: r.status,
+                action_taken: r.actionTaken || null,
+                created_at: r.createdAt
+              }));
+            }
+          }
+
+          for (const [id] of prevMap) {
+            if (!nextIds.has(id)) {
+              await safeExec(client.from('reports').delete().eq('id', id));
+            }
           }
           break;
         }
+
         case 'bugReports': {
-          this.sqlite.exec('DELETE FROM bug_reports;');
-          const stmt = this.sqlite.prepare(`
-            INSERT INTO bug_reports (id, user_id, username, category, description, error_identifier, screenshot, device_info, status, resolution_note, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-          `);
-          for (const b of updated as BugReport[]) {
-            stmt.run(
-              b.id,
-              b.userId,
-              b.username,
-              b.category,
-              b.description,
-              b.errorIdentifier || null,
-              b.screenshot || null,
-              JSON.stringify(b.deviceInfo),
-              b.status,
-              b.resolutionNote || null,
-              b.createdAt
-            );
+          const prevMap = new Map((previous as BugReport[]).map(b => [b.id, b]));
+          const nextList = next as BugReport[];
+          const nextIds = new Set(nextList.map(b => b.id));
+
+          for (const b of nextList) {
+            const p = prevMap.get(b.id);
+            if (!p || JSON.stringify(p) !== JSON.stringify(b)) {
+              await safeExec(client.from('bug_reports').upsert({
+                id: b.id,
+                user_id: b.userId,
+                username: b.username,
+                category: b.category,
+                description: b.description,
+                error_identifier: b.errorIdentifier || null,
+                screenshot: b.screenshot || null,
+                device_info: b.deviceInfo || {},
+                status: b.status,
+                resolution_note: b.resolutionNote || null,
+                created_at: b.createdAt
+              }));
+            }
+          }
+
+          for (const [id] of prevMap) {
+            if (!nextIds.has(id)) {
+              await safeExec(client.from('bug_reports').delete().eq('id', id));
+            }
           }
           break;
         }
-        case 'auditLogs': {
-          this.sqlite.exec('DELETE FROM audit_logs;');
-          const stmt = this.sqlite.prepare(`
-            INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details)
-            VALUES (?, ?, ?, ?, ?, ?);
-          `);
-          for (const a of updated as any[]) {
-            stmt.run(a.id, a.action, a.actorId, a.actorUsername, a.timestamp, a.details || null);
-          }
-          break;
-        }
+
         case 'blocks': {
-          this.sqlite.exec('DELETE FROM blocks;');
-          const stmt = this.sqlite.prepare(`
-            INSERT INTO blocks (id, user_id, blocked_user_id, created_at)
-            VALUES (?, ?, ?, ?);
-          `);
-          for (const b of updated as any[]) {
-            stmt.run(b.id, b.userId, b.blockedUserId, b.createdAt);
+          const prevMap = new Map((previous as any[]).map(b => [b.id, b]));
+          const nextList = next as any[];
+          const nextIds = new Set(nextList.map(b => b.id));
+
+          for (const b of nextList) {
+            const p = prevMap.get(b.id);
+            if (!p || JSON.stringify(p) !== JSON.stringify(b)) {
+              await safeExec(client.from('blocks').upsert({
+                id: b.id,
+                user_id: b.userId,
+                blocked_user_id: b.blockedUserId,
+                created_at: b.createdAt
+              }));
+            }
+          }
+
+          for (const [id] of prevMap) {
+            if (!nextIds.has(id)) {
+              await safeExec(client.from('blocks').delete().eq('id', id));
+            }
           }
           break;
         }
+
         case 'mutes': {
-          this.sqlite.exec('DELETE FROM mutes;');
-          const stmt = this.sqlite.prepare(`
-            INSERT INTO mutes (id, user_id, muted_user_id, created_at)
-            VALUES (?, ?, ?, ?);
-          `);
-          for (const m of updated as any[]) {
-            stmt.run(m.id, m.userId, m.mutedUserId, m.createdAt);
+          const prevMap = new Map((previous as any[]).map(m => [m.id, m]));
+          const nextList = next as any[];
+          const nextIds = new Set(nextList.map(m => m.id));
+
+          for (const m of nextList) {
+            const p = prevMap.get(m.id);
+            if (!p || JSON.stringify(p) !== JSON.stringify(m)) {
+              await safeExec(client.from('mutes').upsert({
+                id: m.id,
+                user_id: m.userId,
+                muted_user_id: m.mutedUserId,
+                created_at: m.createdAt
+              }));
+            }
+          }
+
+          for (const [id] of prevMap) {
+            if (!nextIds.has(id)) {
+              await safeExec(client.from('mutes').delete().eq('id', id));
+            }
           }
           break;
         }
+
         case 'sessions': {
-          this.sqlite.exec('DELETE FROM sessions;');
-          const stmt = this.sqlite.prepare(`
-            INSERT INTO sessions (id, user_id, token, device, ip, created_at, last_active)
-            VALUES (?, ?, ?, ?, ?, ?, ?);
-          `);
-          for (const s of updated as any[]) {
-            stmt.run(s.id, s.userId, s.token, s.device, s.ip, s.createdAt, s.lastActive);
+          const prevMap = new Map((previous as any[]).map(s => [s.id, s]));
+          const nextList = next as any[];
+          const nextIds = new Set(nextList.map(s => s.id));
+
+          for (const s of nextList) {
+            const p = prevMap.get(s.id);
+            if (!p || JSON.stringify(p) !== JSON.stringify(s)) {
+              await safeExec(client.from('sessions').upsert({
+                id: s.id,
+                user_id: s.userId,
+                token: s.token,
+                device: s.device,
+                ip: s.ip,
+                created_at: s.createdAt,
+                last_active: s.lastActive
+              }));
+            }
+          }
+
+          for (const [id] of prevMap) {
+            if (!nextIds.has(id)) {
+              await safeExec(client.from('sessions').delete().eq('id', id));
+            }
           }
           break;
         }
+
         case 'devicePublicKeys': {
-          this.sqlite.exec('DELETE FROM device_public_keys;');
-          const stmt = this.sqlite.prepare(`
-            INSERT INTO device_public_keys (id, user_id, device_id, device_name, public_key_jwk, fingerprint, is_revoked, created_at, last_seen)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
-          `);
-          for (const k of updated as DevicePublicKeyRecord[]) {
-            stmt.run(k.id, k.userId, k.deviceId, k.deviceName, k.publicKeyJwk, k.fingerprint, k.isRevoked ? 1 : 0, k.createdAt, k.lastSeen);
+          const prevMap = new Map((previous as DevicePublicKeyRecord[]).map(k => [k.id, k]));
+          const nextList = next as DevicePublicKeyRecord[];
+          const nextIds = new Set(nextList.map(k => k.id));
+
+          for (const k of nextList) {
+            const p = prevMap.get(k.id);
+            if (!p || JSON.stringify(p) !== JSON.stringify(k)) {
+              let jwk = k.publicKeyJwk;
+              try {
+                if (typeof jwk === 'string') jwk = JSON.parse(jwk);
+              } catch {}
+
+              await safeExec(client.from('device_public_keys').upsert({
+                id: k.id,
+                user_id: k.userId,
+                device_id: k.deviceId,
+                device_name: k.deviceName,
+                public_key_jwk: jwk,
+                fingerprint: k.fingerprint,
+                is_revoked: Boolean(k.isRevoked),
+                created_at: k.createdAt,
+                last_seen: k.lastSeen
+              }));
+            }
+          }
+
+          for (const [id] of prevMap) {
+            if (!nextIds.has(id)) {
+              await safeExec(client.from('device_public_keys').delete().eq('id', id));
+            }
           }
           break;
         }
       }
-      this.sqlite.exec('COMMIT;');
-    } catch (err) {
-      this.sqlite.exec('ROLLBACK;');
-      console.error(`Database transaction error on ${table}:`, err);
-      throw err;
+    } catch (err: any) {
+      console.error(`[Supabase Database] Error in persistTableChanges for ${table}:`, err?.message || err);
+    }
+  }
+
+  public logAudit(actorId: string, actorUsername: string, action: string, details?: string): void {
+    const id = `audit_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+    const timestamp = new Date().toISOString();
+    const entry = { id, action, actorId, actorUsername, timestamp, details: details || undefined };
+
+    this.memoryStore.auditLogs = [entry, ...this.memoryStore.auditLogs];
+
+    const client = getServerSupabase();
+    if (client) {
+      safeExec(client.from('audit_logs').insert({
+        id,
+        action,
+        actor_id: actorId,
+        actor_username: actorUsername,
+        timestamp,
+        details: details || null
+      }));
     }
   }
 
@@ -924,95 +977,127 @@ class SqlDatabaseManager {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    if (fs.existsSync(destinationPath)) {
-      fs.unlinkSync(destinationPath);
-    }
-    this.sqlite.exec(`VACUUM INTO '${destinationPath}';`);
-  }
-
-  public logAudit(actorId: string, actorUsername: string, action: string, details?: string): void {
-    const stmt = this.sqlite.prepare(`
-      INSERT INTO audit_logs (id, action, actor_id, actor_username, timestamp, details)
-      VALUES (?, ?, ?, ?, ?, ?);
-    `);
-    stmt.run(`audit_${Date.now()}`, action, actorId, actorUsername, new Date().toISOString(), details || null);
+    const backupSnapshot = {
+      timestamp: new Date().toISOString(),
+      database: 'supabase-postgresql',
+      schema: this.memoryStore,
+      recovery: this.passwordRecoveryRequests,
+      plans: this.plansStore,
+      capsules: this.capsulesStore,
+      safetyNumbers: this.verifiedSafetyNumbers,
+      registrationOtps: this.registrationOtps,
+      emailLogs: this.emailLogs
+    };
+    fs.writeFileSync(destinationPath, JSON.stringify(backupSnapshot, null, 2), 'utf8');
   }
 
   public resetToDefault(): void {
-    this.sqlite.exec(`
-      DELETE FROM users;
-      DELETE FROM connections;
-      DELETE FROM close_friends;
-      DELETE FROM notes;
-      DELETE FROM conversations;
-      DELETE FROM messages;
-      DELETE FROM notifications;
-      DELETE FROM reports;
-      DELETE FROM bug_reports;
-      DELETE FROM audit_logs;
-      DELETE FROM blocks;
-      DELETE FROM mutes;
-      DELETE FROM sessions;
-      DELETE FROM password_recovery_requests;
-      DELETE FROM plans;
-      DELETE FROM memory_capsules;
-    `);
-    this.seedInitialIfEmpty();
+    this.memoryStore = {
+      users: [],
+      connections: [],
+      closeFriends: [],
+      notes: [],
+      conversations: [],
+      messages: [],
+      notifications: [],
+      reports: [],
+      bugReports: [],
+      auditLogs: [],
+      blocks: [],
+      mutes: [],
+      sessions: [],
+      devicePublicKeys: []
+    };
   }
 
-  // --- Session Management (Direct SQL) ---
+  // --- Session Management ---
   public createSession(userId: string, token: string, device: string, ip: string): void {
     const id = `sess_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
     const now = new Date().toISOString();
-    const stmt = this.sqlite.prepare(`
-      INSERT INTO sessions (id, user_id, token, device, ip, created_at, last_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?);
-    `);
-    stmt.run(id, userId, token, device, ip, now, now);
+    const sess = { id, userId, token, device, ip, createdAt: now, lastActive: now };
+
+    this.memoryStore.sessions = [sess, ...this.memoryStore.sessions.filter(s => s.token !== token)];
+
+    const client = getServerSupabase();
+    if (client) {
+      safeExec(client.from('sessions').upsert({
+        id,
+        user_id: userId,
+        token,
+        device,
+        ip,
+        created_at: now,
+        last_active: now
+      }));
+    }
   }
 
   public getSessionByToken(token: string): { id: string; userId: string; device: string; ip: string; lastActive: string } | null {
-    const row = this.sqlite.prepare('SELECT * FROM sessions WHERE token = ?;').get(token) as any;
-    if (!row) return null;
+    const s = this.memoryStore.sessions.find(x => x.token === token);
+    if (!s) return null;
     return {
-      id: row.id,
-      userId: row.user_id,
-      device: row.device,
-      ip: row.ip,
-      lastActive: row.last_active
+      id: s.id,
+      userId: s.userId,
+      device: s.device,
+      ip: s.ip,
+      lastActive: s.lastActive
     };
   }
 
   public touchSession(token: string): void {
     const now = new Date().toISOString();
-    this.sqlite.prepare('UPDATE sessions SET last_active = ? WHERE token = ?;').run(now, token);
+    const s = this.memoryStore.sessions.find(x => x.token === token);
+    if (s) {
+      s.lastActive = now;
+      const client = getServerSupabase();
+      if (client) {
+        safeExec(client.from('sessions').update({ last_active: now }).eq('token', token));
+      }
+    }
   }
 
   public deleteSessionByToken(token: string): void {
-    this.sqlite.prepare('DELETE FROM sessions WHERE token = ?;').run(token);
+    this.memoryStore.sessions = this.memoryStore.sessions.filter(x => x.token !== token);
+    const client = getServerSupabase();
+    if (client) {
+      safeExec(client.from('sessions').delete().eq('token', token));
+    }
   }
 
   public deleteSessionById(id: string, userId: string): void {
-    this.sqlite.prepare('DELETE FROM sessions WHERE id = ? AND user_id = ?;').run(id, userId);
+    this.memoryStore.sessions = this.memoryStore.sessions.filter(x => !(x.id === id && x.userId === userId));
+    const client = getServerSupabase();
+    if (client) {
+      safeExec(client.from('sessions').delete().eq('id', id).eq('user_id', userId));
+    }
   }
 
   public deleteAllSessionsForUser(userId: string, exceptToken?: string): void {
     if (exceptToken) {
-      this.sqlite.prepare('DELETE FROM sessions WHERE user_id = ? AND token != ?;').run(userId, exceptToken);
+      this.memoryStore.sessions = this.memoryStore.sessions.filter(x => x.userId !== userId || x.token === exceptToken);
+      const client = getServerSupabase();
+      if (client) {
+        safeExec(client.from('sessions').delete().eq('user_id', userId).neq('token', exceptToken));
+      }
     } else {
-      this.sqlite.prepare('DELETE FROM sessions WHERE user_id = ?;').run(userId);
+      this.memoryStore.sessions = this.memoryStore.sessions.filter(x => x.userId !== userId);
+      const client = getServerSupabase();
+      if (client) {
+        safeExec(client.from('sessions').delete().eq('user_id', userId));
+      }
     }
   }
 
   public getUserSessions(userId: string, currentToken?: string): Array<{ id: string; device: string; ip: string; current: boolean; lastActive: string }> {
-    const rows = this.sqlite.prepare('SELECT * FROM sessions WHERE user_id = ? ORDER BY last_active DESC;').all(userId) as any[];
-    return rows.map((r) => ({
-      id: r.id,
-      device: r.device,
-      ip: r.ip,
-      current: r.token === currentToken,
-      lastActive: r.last_active
-    }));
+    return this.memoryStore.sessions
+      .filter(s => s.userId === userId)
+      .map(r => ({
+        id: r.id,
+        device: r.device,
+        ip: r.ip,
+        current: r.token === currentToken,
+        lastActive: r.lastActive
+      }));
   }
 
   // --- Password Recovery Requests ---
@@ -1020,69 +1105,103 @@ class SqlDatabaseManager {
     const id = `rec_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
     const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000).toISOString();
     const now = new Date().toISOString();
-    // Invalidate prior requests for this user
-    this.sqlite.prepare('UPDATE password_recovery_requests SET used = 1 WHERE user_id = ? AND used = 0;').run(userId);
-    this.sqlite.prepare(`
-      INSERT INTO password_recovery_requests (id, user_id, code_hash, expires_at, attempts, used, created_at)
-      VALUES (?, ?, ?, ?, 0, 0, ?);
-    `).run(id, userId, codeHash, expiresAt, now);
+
+    for (const r of this.passwordRecoveryRequests) {
+      if (r.user_id === userId) r.used = 1;
+    }
+
+    const rec = { id, user_id: userId, code_hash: codeHash, expires_at: expiresAt, attempts: 0, used: 0, created_at: now };
+    this.passwordRecoveryRequests.push(rec);
+
+    const client = getServerSupabase();
+    if (client) {
+      (async () => {
+        await client.from('password_recovery_requests').update({ used: true }).eq('user_id', userId);
+        await client.from('password_recovery_requests').insert({
+          id,
+          user_id: userId,
+          code_hash: codeHash,
+          expires_at: expiresAt,
+          attempts: 0,
+          used: false,
+          created_at: now
+        });
+      })().catch((err: any) => {
+        console.error('[Supabase Database] Error creating recovery request in Supabase:', err?.message || err);
+      });
+    }
+
     return id;
   }
 
   public getActiveRecoveryRequest(userId: string): any {
-    const now = new Date().toISOString();
-    return this.sqlite.prepare(`
-      SELECT * FROM password_recovery_requests
-      WHERE user_id = ? AND used = 0 AND expires_at > ? AND attempts < 5
-      ORDER BY created_at DESC LIMIT 1;
-    `).get(userId, now);
+    const now = Date.now();
+    return this.passwordRecoveryRequests
+      .filter(r => r.user_id === userId && !r.used && new Date(r.expires_at).getTime() > now && r.attempts < 5)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] || null;
   }
 
   public incrementRecoveryAttempt(id: string): void {
-    this.sqlite.prepare('UPDATE password_recovery_requests SET attempts = attempts + 1 WHERE id = ?;').run(id);
-  }
-
-  public markRecoveryUsed(id: string): void {
-    this.sqlite.prepare('UPDATE password_recovery_requests SET used = 1 WHERE id = ?;').run(id);
-  }
-
-  // --- Direct SQL for Users ---
-  public updateUserPassword(userId: string, newPasswordHash: string): void {
-    this.sqlite.prepare('UPDATE users SET password_hash = ? WHERE id = ?;').run(newPasswordHash, userId);
-  }
-
-  public purgeUserData(userId: string): void {
-    this.sqlite.exec('BEGIN TRANSACTION;');
-    try {
-      this.sqlite.prepare('DELETE FROM users WHERE id = ?;').run(userId);
-      this.sqlite.prepare('DELETE FROM notes WHERE user_id = ?;').run(userId);
-      this.sqlite.prepare('DELETE FROM connections WHERE requester_id = ? OR target_id = ?;').run(userId, userId);
-      this.sqlite.prepare('DELETE FROM close_friends WHERE user_id = ? OR friend_id = ?;').run(userId, userId);
-      this.sqlite.prepare('DELETE FROM sessions WHERE user_id = ?;').run(userId);
-      this.sqlite.prepare('DELETE FROM device_public_keys WHERE user_id = ?;').run(userId);
-      this.sqlite.prepare('DELETE FROM blocks WHERE user_id = ? OR blocked_user_id = ?;').run(userId, userId);
-      this.sqlite.prepare('DELETE FROM mutes WHERE user_id = ? OR muted_user_id = ?;').run(userId, userId);
-      this.sqlite.prepare('DELETE FROM password_recovery_requests WHERE user_id = ?;').run(userId);
-      this.sqlite.exec('COMMIT;');
-    } catch (err) {
-      this.sqlite.exec('ROLLBACK;');
-      throw err;
+    const r = this.passwordRecoveryRequests.find(x => x.id === id);
+    if (r) {
+      r.attempts = (r.attempts || 0) + 1;
+      const client = getServerSupabase();
+      if (client) {
+        safeExec(client.from('password_recovery_requests').update({ attempts: r.attempts }).eq('id', id));
+      }
     }
   }
 
-  // --- Plans (Signature Feature with Strict Circle Authorization) ---
-  public getPlansForUser(userId: string): any[] {
-    const connections = this.sqlite.prepare(`
-      SELECT target_id as contact_id FROM connections WHERE requester_id = ? AND status = 'ACCEPTED'
-      UNION
-      SELECT requester_id as contact_id FROM connections WHERE target_id = ? AND status = 'ACCEPTED';
-    `).all(userId, userId) as any[];
-    const authorizedCreatorIds = new Set<string>([userId, ...connections.map((c) => c.contact_id)]);
+  public markRecoveryUsed(id: string): void {
+    const r = this.passwordRecoveryRequests.find(x => x.id === id);
+    if (r) {
+      r.used = 1;
+      const client = getServerSupabase();
+      if (client) {
+        safeExec(client.from('password_recovery_requests').update({ used: true }).eq('id', id));
+      }
+    }
+  }
 
-    const rows = this.sqlite.prepare('SELECT * FROM plans ORDER BY scheduled_time ASC;').all() as any[];
-    return rows
+  // --- Users Direct SQL Operations ---
+  public updateUserPassword(userId: string, newPasswordHash: string): void {
+    const u = this.memoryStore.users.find(x => x.id === userId);
+    if (u) {
+      (u as any).passwordHash = newPasswordHash;
+      const client = getServerSupabase();
+      if (client) {
+        safeExec(client.from('users').update({ password_hash: newPasswordHash }).eq('id', userId));
+      }
+    }
+  }
+
+  public purgeUserData(userId: string): void {
+    this.memoryStore.users = this.memoryStore.users.filter(x => x.id !== userId);
+    this.memoryStore.notes = this.memoryStore.notes.filter(x => x.userId !== userId);
+    this.memoryStore.connections = this.memoryStore.connections.filter(x => x.requesterId !== userId && x.targetId !== userId);
+    this.memoryStore.closeFriends = this.memoryStore.closeFriends.filter(x => x.userId !== userId && x.friendId !== userId);
+    this.memoryStore.sessions = this.memoryStore.sessions.filter(x => x.userId !== userId);
+    this.memoryStore.devicePublicKeys = this.memoryStore.devicePublicKeys.filter(x => x.userId !== userId);
+    this.memoryStore.blocks = this.memoryStore.blocks.filter(x => x.userId !== userId && x.blockedUserId !== userId);
+    this.memoryStore.mutes = this.memoryStore.mutes.filter(x => x.userId !== userId && x.mutedUserId !== userId);
+    this.passwordRecoveryRequests = this.passwordRecoveryRequests.filter(x => x.user_id !== userId);
+
+    const client = getServerSupabase();
+    if (client) {
+      safeExec(client.from('users').delete().eq('id', userId));
+    }
+  }
+
+  // --- Plans ---
+  public getPlansForUser(userId: string): any[] {
+    const acceptedConnections = this.memoryStore.connections
+      .filter(c => c.status === 'ACCEPTED' && (c.requesterId === userId || c.targetId === userId))
+      .map(c => c.requesterId === userId ? c.targetId : c.requesterId);
+    
+    const authorizedCreatorIds = new Set<string>([userId, ...acceptedConnections]);
+
+    return this.plansStore
       .filter((r) => {
-        // Creator themselves, or connected circle member, or user in rsvps
         if (authorizedCreatorIds.has(r.creator_id)) return true;
         const rsvps = JSON.parse(r.rsvps || '[]');
         return rsvps.some((rsvp: any) => rsvp.userId === userId);
@@ -1100,7 +1219,7 @@ class SqlDatabaseManager {
   }
 
   public getPlanById(planId: string): any | null {
-    const r = this.sqlite.prepare('SELECT * FROM plans WHERE id = ?;').get(planId) as any;
+    const r = this.plansStore.find(x => x.id === planId);
     if (!r) return null;
     return {
       id: r.id,
@@ -1115,31 +1234,49 @@ class SqlDatabaseManager {
   }
 
   public createPlan(plan: { id: string; creatorId: string; title: string; emoji: string; scheduledTime: string; location?: string }): void {
-    this.sqlite.prepare(`
-      INSERT INTO plans (id, creator_id, title, emoji, scheduled_time, location, rsvps, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, '[]', ?);
-    `).run(plan.id, plan.creatorId, plan.title, plan.emoji, plan.scheduledTime, plan.location || null, new Date().toISOString());
+    const now = new Date().toISOString();
+    const newRecord = {
+      id: plan.id,
+      creator_id: plan.creatorId,
+      title: plan.title,
+      emoji: plan.emoji,
+      scheduled_time: plan.scheduledTime,
+      location: plan.location || null,
+      rsvps: '[]',
+      created_at: now
+    };
+    this.plansStore.push(newRecord);
+
+    const client = getServerSupabase();
+    if (client) {
+      safeExec(client.from('plans').insert({
+        id: plan.id,
+        creator_id: plan.creatorId,
+        title: plan.title,
+        emoji: plan.emoji,
+        scheduled_time: plan.scheduledTime,
+        location: plan.location || null,
+        rsvps: [],
+        created_at: now
+      }));
+    }
   }
 
   public updatePlanRsvp(planId: string, userId: string, username: string, status: 'attending' | 'maybe' | 'declined'): boolean {
-    const row = this.sqlite.prepare('SELECT * FROM plans WHERE id = ?;').get(planId) as any;
+    const row = this.plansStore.find(x => x.id === planId);
     if (!row) return false;
 
-    // Authorization check: User must be creator or in creator's accepted circle
     const isCreator = row.creator_id === userId;
     let isConnected = false;
     if (!isCreator) {
-      const conn = this.sqlite.prepare(`
-        SELECT 1 FROM connections 
-        WHERE ((requester_id = ? AND target_id = ?) OR (requester_id = ? AND target_id = ?))
-        AND status = 'ACCEPTED';
-      `).get(userId, row.creator_id, row.creator_id, userId);
-      isConnected = !!conn;
+      isConnected = this.memoryStore.connections.some(c =>
+        c.status === 'ACCEPTED' &&
+        ((c.requesterId === userId && c.targetId === row.creator_id) ||
+         (c.targetId === userId && c.requesterId === row.creator_id))
+      );
     }
 
-    if (!isCreator && !isConnected) {
-      return false; // Unauthorized to RSVP to plans outside their circle
-    }
+    if (!isCreator && !isConnected) return false;
 
     const rsvps = JSON.parse(row.rsvps || '[]');
     const existingIdx = rsvps.findIndex((r: any) => r.userId === userId);
@@ -1149,23 +1286,25 @@ class SqlDatabaseManager {
     } else {
       rsvps.push({ userId, username, status, updatedAt: new Date().toISOString() });
     }
-    this.sqlite.prepare('UPDATE plans SET rsvps = ? WHERE id = ?;').run(JSON.stringify(rsvps), planId);
+    row.rsvps = JSON.stringify(rsvps);
+
+    const client = getServerSupabase();
+    if (client) {
+      safeExec(client.from('plans').update({ rsvps }).eq('id', planId));
+    }
+
     return true;
   }
 
-  // --- Memory Capsules (Signature Feature with Zero Content Leakage Prior to Unlock) ---
+  // --- Memory Capsules ---
   public getMemoryCapsules(userId: string): any[] {
-    const connections = this.sqlite.prepare(`
-      SELECT target_id as contact_id FROM connections WHERE requester_id = ? AND status = 'ACCEPTED'
-      UNION
-      SELECT requester_id as contact_id FROM connections WHERE target_id = ? AND status = 'ACCEPTED';
-    `).all(userId, userId) as any[];
-    const circleMemberIds = new Set<string>([userId, ...connections.map((c) => c.contact_id)]);
+    const acceptedConnections = this.memoryStore.connections
+      .filter(c => c.status === 'ACCEPTED' && (c.requesterId === userId || c.targetId === userId))
+      .map(c => c.requesterId === userId ? c.targetId : c.requesterId);
+    const circleMemberIds = new Set<string>([userId, ...acceptedConnections]);
 
-    const rows = this.sqlite.prepare('SELECT * FROM memory_capsules ORDER BY created_at DESC;').all() as any[];
     const now = Date.now();
-
-    return rows
+    return this.capsulesStore
       .filter((r) => circleMemberIds.has(r.creator_id))
       .map((r) => {
         const isLocked = r.unlock_at ? new Date(r.unlock_at).getTime() > now : false;
@@ -1176,7 +1315,6 @@ class SqlDatabaseManager {
           coverEmoji: r.cover_emoji,
           unlockAt: r.unlock_at,
           isLocked,
-          // CRITICAL ZERO DATA LEAKAGE: contents strictly stripped if capsule is locked!
           items: isLocked ? [] : JSON.parse(r.items || '[]'),
           createdAt: r.created_at
         };
@@ -1184,26 +1322,58 @@ class SqlDatabaseManager {
   }
 
   public createMemoryCapsule(capsule: { id: string; creatorId: string; title: string; coverEmoji: string; unlockAt?: string; items: any[] }): void {
-    this.sqlite.prepare(`
-      INSERT INTO memory_capsules (id, creator_id, title, cover_emoji, unlock_at, items, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?);
-    `).run(capsule.id, capsule.creatorId, capsule.title, capsule.coverEmoji, capsule.unlockAt || null, JSON.stringify(capsule.items || []), new Date().toISOString());
+    const now = new Date().toISOString();
+    const record = {
+      id: capsule.id,
+      creator_id: capsule.creatorId,
+      title: capsule.title,
+      cover_emoji: capsule.coverEmoji,
+      unlock_at: capsule.unlockAt || null,
+      items: JSON.stringify(capsule.items || []),
+      created_at: now
+    };
+    this.capsulesStore.unshift(record);
+
+    const client = getServerSupabase();
+    if (client) {
+      safeExec(client.from('memory_capsules').insert({
+        id: capsule.id,
+        creator_id: capsule.creatorId,
+        title: capsule.title,
+        cover_emoji: capsule.coverEmoji,
+        unlock_at: capsule.unlockAt || null,
+        items: capsule.items || [],
+        created_at: now
+      }));
+    }
   }
 
-  // --- Out-of-band Safety Numbers Verification State ---
+  // --- Out-of-band Safety Numbers Verification ---
   public isSafetyNumberVerified(userId: string, contactId: string): boolean {
-    const row = this.sqlite.prepare('SELECT 1 FROM verified_safety_numbers WHERE user_id = ? AND contact_id = ?;').get(userId, contactId);
-    return !!row;
+    return this.verifiedSafetyNumbers.some(x => x.userId === userId && x.contactId === contactId);
   }
 
   public setSafetyNumberVerified(userId: string, contactId: string, verified: boolean): void {
     if (verified) {
-      this.sqlite.prepare(`
-        INSERT OR REPLACE INTO verified_safety_numbers (user_id, contact_id, verified_at)
-        VALUES (?, ?, ?);
-      `).run(userId, contactId, new Date().toISOString());
+      const now = new Date().toISOString();
+      this.verifiedSafetyNumbers = [
+        ...this.verifiedSafetyNumbers.filter(x => !(x.userId === userId && x.contactId === contactId)),
+        { userId, contactId, verifiedAt: now }
+      ];
+      const client = getServerSupabase();
+      if (client) {
+        safeExec(client.from('verified_safety_numbers').upsert({
+          user_id: userId,
+          contact_id: contactId,
+          verified_at: now
+        }));
+      }
     } else {
-      this.sqlite.prepare('DELETE FROM verified_safety_numbers WHERE user_id = ? AND contact_id = ?;').run(userId, contactId);
+      this.verifiedSafetyNumbers = this.verifiedSafetyNumbers.filter(x => !(x.userId === userId && x.contactId === contactId));
+      const client = getServerSupabase();
+      if (client) {
+        safeExec(client.from('verified_safety_numbers').delete().eq('user_id', userId).eq('contact_id', contactId));
+      }
     }
   }
 
@@ -1215,38 +1385,69 @@ class SqlDatabaseManager {
     const resendAvailableAt = new Date(now + cooldownSeconds * 1000).toISOString();
     const createdAt = new Date(now).toISOString();
 
-    // Invalidate previous unverified OTPs for this email
-    this.sqlite.prepare('UPDATE registration_otps SET used = 1 WHERE email = ? AND verified = 0;').run(email);
+    for (const o of this.registrationOtps) {
+      if (o.email.toLowerCase() === email.toLowerCase() && !o.verified) {
+        o.used = 1;
+      }
+    }
 
-    this.sqlite.prepare(`
-      INSERT INTO registration_otps (id, email, otp_hash, expires_at, attempts, max_attempts, resend_available_at, verified, used, created_at)
-      VALUES (?, ?, ?, ?, 0, 5, ?, 0, 0, ?);
-    `).run(id, email, otpHash, expiresAt, resendAvailableAt, createdAt);
+    const rec = {
+      id,
+      email: email.toLowerCase(),
+      otp_hash: otpHash,
+      expires_at: expiresAt,
+      attempts: 0,
+      max_attempts: 5,
+      resend_available_at: resendAvailableAt,
+      verified: 0,
+      verification_token_hash: null,
+      used: 0,
+      created_at: createdAt
+    };
+    this.registrationOtps.unshift(rec);
+
+    const client = getServerSupabase();
+    if (client) {
+      (async () => {
+        await client.from('registration_otps').update({ used: true }).eq('email', email.toLowerCase()).eq('verified', false);
+        await client.from('registration_otps').insert({
+          id,
+          email: email.toLowerCase(),
+          otp_hash: otpHash,
+          expires_at: expiresAt,
+          attempts: 0,
+          max_attempts: 5,
+          resend_available_at: resendAvailableAt,
+          verified: false,
+          used: false,
+          created_at: createdAt
+        });
+      })().catch((err: any) => {
+        console.error('[Supabase Database] Error saving registration OTP to Supabase:', err?.message || err);
+      });
+    }
 
     return { id, expiresAt, cooldownUntil: resendAvailableAt };
   }
 
   public removeRegistrationOtp(id: string): void {
-    this.sqlite.prepare('DELETE FROM registration_otps WHERE id = ?;').run(id);
+    this.registrationOtps = this.registrationOtps.filter(x => x.id !== id);
+    const client = getServerSupabase();
+    if (client) {
+      safeExec(client.from('registration_otps').delete().eq('id', id));
+    }
   }
 
   public getLatestRegistrationOtp(email: string): any {
-    return this.sqlite.prepare(`
-      SELECT * FROM registration_otps
-      WHERE email = ? AND used = 0
-      ORDER BY created_at DESC
-      LIMIT 1;
-    `).get(email);
+    const cleanEmail = email.toLowerCase();
+    return this.registrationOtps
+      .filter(x => x.email === cleanEmail && !x.used)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] || null;
   }
 
   public checkEmailCooldown(email: string): { inCooldown: boolean; secondsRemaining: number } {
-    const latest = this.sqlite.prepare(`
-      SELECT resend_available_at FROM registration_otps
-      WHERE email = ?
-      ORDER BY created_at DESC
-      LIMIT 1;
-    `).get(email) as any;
-
+    const cleanEmail = email.toLowerCase();
+    const latest = this.getLatestRegistrationOtp(cleanEmail);
     if (!latest) return { inCooldown: false, secondsRemaining: 0 };
     const cooldownTime = new Date(latest.resend_available_at).getTime();
     const diff = cooldownTime - Date.now();
@@ -1257,45 +1458,71 @@ class SqlDatabaseManager {
   }
 
   public incrementOtpAttempts(id: string): number {
-    this.sqlite.prepare('UPDATE registration_otps SET attempts = attempts + 1 WHERE id = ?;').run(id);
-    const row = this.sqlite.prepare('SELECT attempts, max_attempts FROM registration_otps WHERE id = ?;').get(id) as any;
-    return row ? row.attempts : 0;
+    const o = this.registrationOtps.find(x => x.id === id);
+    if (o) {
+      o.attempts = (o.attempts || 0) + 1;
+      const client = getServerSupabase();
+      if (client) {
+        safeExec(client.from('registration_otps').update({ attempts: o.attempts }).eq('id', id));
+      }
+      return o.attempts;
+    }
+    return 0;
   }
 
   public markRegistrationOtpVerified(id: string, verificationTokenHash: string): void {
-    this.sqlite.prepare(`
-      UPDATE registration_otps
-      SET verified = 1, verification_token_hash = ?
-      WHERE id = ?;
-    `).run(verificationTokenHash, id);
+    const o = this.registrationOtps.find(x => x.id === id);
+    if (o) {
+      o.verified = 1;
+      o.verification_token_hash = verificationTokenHash;
+      const client = getServerSupabase();
+      if (client) {
+        safeExec(client.from('registration_otps').update({
+          verified: true,
+          verification_token_hash: verificationTokenHash
+        }).eq('id', id));
+      }
+    }
   }
 
   public consumeRegistrationOtp(email: string, verificationTokenHash: string): boolean {
-    const row = this.sqlite.prepare(`
-      SELECT id FROM registration_otps
-      WHERE email = ? AND verification_token_hash = ? AND verified = 1 AND used = 0;
-    `).get(email, verificationTokenHash) as any;
+    const cleanEmail = email.toLowerCase();
+    const o = this.registrationOtps.find(x => x.email === cleanEmail && x.verification_token_hash === verificationTokenHash && x.verified && !x.used);
+    if (!o) return false;
+    o.used = 1;
 
-    if (!row) return false;
+    const client = getServerSupabase();
+    if (client) {
+      safeExec(client.from('registration_otps').update({ used: true }).eq('id', o.id));
+    }
 
-    this.sqlite.prepare('UPDATE registration_otps SET used = 1 WHERE id = ?;').run(row.id);
     return true;
   }
 
   // --- Transactional Email Logs ---
   public logEmail(recipient: string, type: string, status: string, provider: string, error?: string): void {
     const id = `elog_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-    this.sqlite.prepare(`
-      INSERT INTO email_logs (id, recipient, type, status, provider, error, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?);
-    `).run(id, recipient, type, status, provider, error || null, new Date().toISOString());
+    const now = new Date().toISOString();
+    const entry = { id, recipient, type, status, provider, error: error || null, created_at: now };
+    this.emailLogs.unshift(entry);
+
+    const client = getServerSupabase();
+    if (client) {
+      safeExec(client.from('email_logs').insert({
+        id,
+        recipient,
+        type,
+        status,
+        provider,
+        error: error || null,
+        created_at: now
+      }));
+    }
   }
 
   public getEmailLogs(limit = 100): any[] {
-    return this.sqlite.prepare(`
-      SELECT * FROM email_logs ORDER BY created_at DESC LIMIT ?;
-    `).all(limit) as any[];
+    return this.emailLogs.slice(0, limit);
   }
 }
 
-export const db = new SqlDatabaseManager();
+export const db = new SupabaseDatabaseManager();

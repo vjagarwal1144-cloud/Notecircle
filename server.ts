@@ -79,6 +79,30 @@ async function startServer() {
   const authLimiter = createRateLimiter(60, 60 * 1000); // 60 req/min for auth
   const chatLimiter = createRateLimiter(180, 60 * 1000); // 180 req/min for chat
 
+  // Hydrate session from Supabase if not yet in process memory
+  app.use(async (req, _res, next) => {
+    try {
+      let token: string | null = null;
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace(/^Bearer\s+/, '').trim();
+      } else if (req.headers.cookie) {
+        const cookies = req.headers.cookie.split(';');
+        for (const c of cookies) {
+          const trimmed = c.trim();
+          if (trimmed.startsWith('nc_session_token=')) {
+            token = decodeURIComponent(trimmed.substring('nc_session_token='.length));
+            break;
+          }
+        }
+      }
+      if (token) {
+        await db.ensureSessionLoaded(token);
+      }
+    } catch {}
+    next();
+  });
+
   // Mount API routers
   app.use('/api/auth', authLimiter, authRouter);
   app.use('/api/users', usersRouter);

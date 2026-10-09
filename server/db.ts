@@ -1032,6 +1032,37 @@ class SupabaseDatabaseManager {
     }
   }
 
+  public async ensureSessionLoaded(token: string): Promise<void> {
+    if (this.memoryStore.sessions.some(s => s.token === token)) return;
+    const client = getServerSupabase();
+    if (!client) return;
+
+    try {
+      const { data } = await client.from('sessions').select('*').eq('token', token).maybeSingle();
+      if (data) {
+        const sess = {
+          id: data.id,
+          userId: data.user_id,
+          token: data.token,
+          device: data.device || 'Web Client',
+          ip: data.ip || '127.0.0.1',
+          createdAt: data.created_at,
+          lastActive: data.last_active
+        };
+        this.memoryStore.sessions.unshift(sess);
+        return;
+      }
+
+      // If token is cryptographically valid HMAC and user exists, register session in memory and Supabase
+      const userId = parseToken(token);
+      if (userId && this.memoryStore.users.some(u => u.id === userId)) {
+        this.createSession(userId, token, 'Authenticated Client', '127.0.0.1');
+      }
+    } catch (err: any) {
+      console.warn('[Supabase Database] Error hydrating session:', err?.message || err);
+    }
+  }
+
   public getSessionByToken(token: string): { id: string; userId: string; device: string; ip: string; lastActive: string } | null {
     const s = this.memoryStore.sessions.find(x => x.token === token);
     if (!s) return null;
@@ -1443,6 +1474,32 @@ class SupabaseDatabaseManager {
     return this.registrationOtps
       .filter(x => x.email === cleanEmail && !x.used)
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] || null;
+  }
+
+  public async fetchRegistrationOtp(email: string): Promise<any> {
+    const cleanEmail = email.toLowerCase();
+    const local = this.getLatestRegistrationOtp(cleanEmail);
+    if (local) return local;
+
+    const client = getServerSupabase();
+    if (!client) return null;
+
+    try {
+      const { data } = await client
+        .from('registration_otps')
+        .select('*')
+        .eq('email', cleanEmail)
+        .eq('used', false)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data) {
+        this.registrationOtps.unshift(data);
+        return data;
+      }
+    } catch {}
+    return null;
   }
 
   public checkEmailCooldown(email: string): { inCooldown: boolean; secondsRemaining: number } {

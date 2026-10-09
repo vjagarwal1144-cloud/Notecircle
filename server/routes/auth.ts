@@ -20,6 +20,17 @@ function hashVerificationToken(token: string): string {
   return crypto.createHash('sha256').update(`nc_verif_salt_${token.trim()}`).digest('hex');
 }
 
+/**
+ * Strips passwordHash, password_hash and internal security secrets before returning to client.
+ */
+export function sanitizeUser<T extends Record<string, any>>(user: T | null | undefined): T | null {
+  if (!user) return null;
+  const copy = { ...user };
+  delete (copy as any).passwordHash;
+  delete (copy as any).password_hash;
+  return copy as T;
+}
+
 // Middleware to extract authenticated user & validate active server-side session
 // Supports both HttpOnly Secure Cookie (browser) and Bearer header (REST API / Mobile / CLI)
 export function getAuthUser(req: any): User | null {
@@ -62,7 +73,7 @@ authRouter.get('/me', (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Session invalid or expired. Please sign in.' });
   }
-  return res.json({ user });
+  return res.json({ user: sanitizeUser(user) });
 });
 
 // POST /api/auth/login
@@ -106,7 +117,7 @@ authRouter.post('/login', (req, res) => {
     maxAge: 30 * 24 * 60 * 60 * 1000
   });
 
-  return res.json({ token, user });
+  return res.json({ token, user: sanitizeUser(user) });
 });
 
 // POST /api/auth/register/send-otp
@@ -168,7 +179,7 @@ authRouter.post('/register/send-otp', async (req, res) => {
 
 // POST /api/auth/register/verify-otp
 // Step 2: Verify the 6-digit OTP and return a secure single-use verification token
-authRouter.post('/register/verify-otp', (req, res) => {
+authRouter.post('/register/verify-otp', async (req, res) => {
   const { email, otp } = req.body;
   if (!email || !otp) {
     return res.status(400).json({ error: 'Email and 6-digit verification code are required' });
@@ -177,7 +188,7 @@ authRouter.post('/register/verify-otp', (req, res) => {
   const cleanEmail = email.trim().toLowerCase();
   const cleanOtp = String(otp).trim();
 
-  const record = db.getLatestRegistrationOtp(cleanEmail);
+  const record = (await db.fetchRegistrationOtp(cleanEmail)) || db.getLatestRegistrationOtp(cleanEmail);
   if (!record) {
     return res.status(404).json({ error: 'No active verification code found for this email. Please request a new code.' });
   }
@@ -327,7 +338,7 @@ authRouter.post('/register/complete', async (req, res) => {
     maxAge: 30 * 24 * 60 * 60 * 1000
   });
 
-  return res.status(201).json({ token, user: newUser });
+  return res.status(201).json({ token, user: sanitizeUser(newUser) });
 });
 
 // Legacy / Direct register endpoint protection: requires verification

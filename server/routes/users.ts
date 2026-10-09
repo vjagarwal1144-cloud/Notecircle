@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { db, hashPassword } from '../db.ts';
-import { getAuthUser } from './auth.ts';
+import { getAuthUser, sanitizeUser } from './auth.ts';
+import { getServerSupabase } from '../supabase.ts';
 import { getRedactedProfile, isBlocked } from '../privacy.ts';
 import type { UserAvailability } from '../../src/types/index.ts';
 
@@ -94,7 +95,7 @@ usersRouter.put('/me/availability', (req, res) => {
     })
   );
 
-  return res.json({ availability: newAvailability, user: updatedUser });
+  return res.json({ availability: newAvailability, user: sanitizeUser(updatedUser) });
 });
 
 // PUT /api/users/me (Update profile fields)
@@ -140,11 +141,11 @@ usersRouter.put('/me', (req, res) => {
 
   db.logAudit(viewer.id, updatedUser.username, 'PROFILE_UPDATED', `Display name: ${updatedUser.displayName}, handle: @${updatedUser.username}`);
 
-  return res.json({ user: updatedUser });
+  return res.json({ user: sanitizeUser(updatedUser) });
 });
 
 // POST /api/users/me/avatar (Upload and set profile photo)
-usersRouter.post('/me/avatar', (req, res) => {
+usersRouter.post('/me/avatar', async (req, res) => {
   const viewer = getAuthUser(req);
   if (!viewer) return res.status(401).json({ error: 'Unauthorized' });
 
@@ -206,20 +207,48 @@ usersRouter.post('/me/avatar', (req, res) => {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
 
-  const safeFilename = `avatar_${viewer.id}_${Date.now()}_${crypto.randomBytes(3).toString('hex')}.${extension}`;
+  const safeFilename = `avatar_${viewer.id}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.${extension}`;
   const filePath = path.join(uploadsDir, safeFilename);
 
   fs.writeFileSync(filePath, buffer);
 
-  const newAvatarUrl = `/uploads/avatars/${safeFilename}`;
+  let newAvatarUrl = `/uploads/avatars/${safeFilename}`;
 
-  // Clean up previous uploaded avatar file if it was in local uploads
-  if (viewer.avatarUrl && viewer.avatarUrl.startsWith('/uploads/avatars/')) {
+  // Upload to Supabase Storage for persistent cross-deployment availability
+  const sb = getServerSupabase();
+  if (sb) {
     try {
-      const oldFilename = path.basename(viewer.avatarUrl);
-      const oldFilePath = path.join(uploadsDir, oldFilename);
-      if (fs.existsSync(oldFilePath)) {
-        fs.unlinkSync(oldFilePath);
+      const { error: storageErr } = await sb.storage
+        .from('avatars')
+        .upload(safeFilename, buffer, {
+          contentType: mimeType,
+          upsert: true
+        });
+      if (!storageErr) {
+        const { data: publicData } = sb.storage.from('avatars').getPublicUrl(safeFilename);
+        if (publicData?.publicUrl) {
+          newAvatarUrl = publicData.publicUrl;
+        }
+      } else {
+        console.warn('[Avatar Upload] Supabase storage upload warning:', storageErr.message);
+      }
+    } catch (uploadException: any) {
+      console.warn('[Avatar Upload] Supabase storage exception:', uploadException?.message || uploadException);
+    }
+  }
+
+  // Clean up previous uploaded avatar file
+  if (viewer.avatarUrl) {
+    try {
+      if (viewer.avatarUrl.startsWith('/uploads/avatars/')) {
+        const oldFilename = path.basename(viewer.avatarUrl);
+        const oldFilePath = path.join(uploadsDir, oldFilename);
+        if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath);
+      } else if (viewer.avatarUrl.includes('/storage/v1/object/public/avatars/')) {
+        const parts = viewer.avatarUrl.split('/storage/v1/object/public/avatars/');
+        if (parts[1] && sb) {
+          sb.storage.from('avatars').remove([parts[1]]).catch(() => {});
+        }
       }
     } catch (cleanupErr) {
       console.warn('Failed to clean up old avatar:', cleanupErr);
@@ -245,23 +274,29 @@ usersRouter.post('/me/avatar', (req, res) => {
   return res.json({
     success: true,
     avatarUrl: newAvatarUrl,
-    user: updatedUser
+    user: sanitizeUser(updatedUser)
   });
 });
 
 // DELETE /api/users/me/avatar (Remove profile photo)
-usersRouter.delete('/me/avatar', (req, res) => {
+usersRouter.delete('/me/avatar', async (req, res) => {
   const viewer = getAuthUser(req);
   if (!viewer) return res.status(401).json({ error: 'Unauthorized' });
 
+  const sb = getServerSupabase();
   // Clean up previous uploaded avatar file
-  if (viewer.avatarUrl && viewer.avatarUrl.startsWith('/uploads/avatars/')) {
+  if (viewer.avatarUrl) {
     try {
-      const uploadsDir = path.resolve(process.cwd(), 'data/uploads/avatars');
-      const oldFilename = path.basename(viewer.avatarUrl);
-      const oldFilePath = path.join(uploadsDir, oldFilename);
-      if (fs.existsSync(oldFilePath)) {
-        fs.unlinkSync(oldFilePath);
+      if (viewer.avatarUrl.startsWith('/uploads/avatars/')) {
+        const uploadsDir = path.resolve(process.cwd(), 'data/uploads/avatars');
+        const oldFilename = path.basename(viewer.avatarUrl);
+        const oldFilePath = path.join(uploadsDir, oldFilename);
+        if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath);
+      } else if (viewer.avatarUrl.includes('/storage/v1/object/public/avatars/')) {
+        const parts = viewer.avatarUrl.split('/storage/v1/object/public/avatars/');
+        if (parts[1] && sb) {
+          await sb.storage.from('avatars').remove([parts[1]]);
+        }
       }
     } catch {}
   }
@@ -285,7 +320,7 @@ usersRouter.delete('/me/avatar', (req, res) => {
   return res.json({
     success: true,
     avatarUrl: null,
-    user: updatedUser
+    user: sanitizeUser(updatedUser)
   });
 });
 
@@ -313,7 +348,7 @@ usersRouter.put('/me/privacy', (req, res) => {
     })
   );
 
-  return res.json({ user: updatedUser });
+  return res.json({ user: sanitizeUser(updatedUser) });
 });
 
 // PUT /api/users/me/notifications (Update notification settings)
@@ -340,7 +375,7 @@ usersRouter.put('/me/notifications', (req, res) => {
     })
   );
 
-  return res.json({ user: updatedUser });
+  return res.json({ user: sanitizeUser(updatedUser) });
 });
 
 // PUT /api/users/me/credentials (Change password, email, phone)
@@ -376,7 +411,7 @@ usersRouter.put('/me/credentials', (req, res) => {
   );
 
   db.logAudit(viewer.id, viewer.username, 'CREDENTIALS_CHANGED', 'User updated account credentials');
-  return res.json({ success: true, user: updatedUser });
+  return res.json({ success: true, user: sanitizeUser(updatedUser) });
 });
 
 // GET /api/users/me/sessions (Active sessions from real database)
